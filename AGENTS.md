@@ -316,7 +316,10 @@ Don't:
 - Catch and silently swallow `CanvasError` subclasses. Always route through
   `handle_canvas_error`.
 - Use `print()`. Use `emit()` (stdout) or `err_console.print()` (stderr).
-- Add an extension that duplicates a built-in command group's name.
+- Add an extension that duplicates a built-in command group's name. The
+  loader warns on stderr when this happens, but the extension still wins:
+  it shadows the built-in group entirely, so every command in that group
+  disappears.
 - Modify `extensions/__init__.py` (the discovery loader) unless you're
   fixing a bug in it.
 - Mock the network in code. Use the `responses` library in tests instead.
