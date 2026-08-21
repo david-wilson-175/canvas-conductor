@@ -20,6 +20,7 @@ from .commands import (
     groups,
     modules,
     pages,
+    sections,
     submissions,
     tabs,
 )
@@ -65,6 +66,7 @@ app.add_typer(assignments.app, name="assignments")
 app.add_typer(files.app, name="files")
 app.add_typer(submissions.app, name="submissions")
 app.add_typer(enrollments.app, name="enrollments")
+app.add_typer(sections.app, name="sections")
 app.add_typer(tabs.app, name="tabs")
 app.add_typer(discussions.app, name="discussions")
 app.add_typer(groups.app, name="groups")
