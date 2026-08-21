@@ -222,6 +222,20 @@ conductor enrollments list -c is402 --type student --state active
 conductor enrollments summary -c is402          # Show enrollment counts by type
 ```
 
+### Sections
+
+Cross-listing is how Canvas combines multiple sections into one course:
+each section moves into a destination shell, bringing its students with it.
+Run with `--dry-run` first — the pre-flight check reports how many graded
+submissions each section would carry out of its current course.
+
+```bash
+conductor sections list -c is402                # List sections + student counts
+conductor sections crosslist --ids 45231,45232 -c is402 --dry-run
+conductor sections crosslist --from is402-b -c is402 -y   # Absorb a whole shell
+conductor sections uncrosslist --id 45231       # Restore to original course
+```
+
 ### Tabs (Navigation)
 
 ```bash

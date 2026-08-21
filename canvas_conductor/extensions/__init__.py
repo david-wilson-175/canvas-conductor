@@ -22,14 +22,39 @@ from pathlib import Path
 import typer
 
 
+def _claimed_names(main_app: typer.Typer) -> set[str]:
+    """Return the command-group and command names already bound on `main_app`."""
+    names: set[str] = set()
+    for group in main_app.registered_groups:
+        instance = group.typer_instance
+        name = group.name or (instance.info.name if instance else None)
+        if name:
+            names.add(name)
+    for command in main_app.registered_commands:
+        name = command.name or (
+            command.callback.__name__ if command.callback else None
+        )
+        if name:
+            names.add(name)
+    return names
+
+
 def discover_extensions(main_app: typer.Typer) -> list[str]:
     """Scan this package for modules that expose `app: typer.Typer`.
 
     Each found app is registered onto `main_app` via `add_typer`. Returns the
     list of registered extension names. Errors are printed to stderr but do
     not crash the CLI.
+
+    Extensions load after the core groups, and Typer resolves a duplicate
+    name in favor of the last registration — so an extension claiming an
+    existing name silently replaces that group in full, not just the
+    overlapping commands. That shadowing is preserved here (removing it
+    would break anyone relying on it), but it gets a stderr warning so the
+    cause isn't invisible when a documented built-in appears to vanish.
     """
     registered: list[str] = []
+    claimed = _claimed_names(main_app)
     pkg_path = Path(__file__).parent
 
     for info in pkgutil.iter_modules([str(pkg_path)]):
@@ -52,6 +77,15 @@ def discover_extensions(main_app: typer.Typer) -> list[str]:
             continue
 
         name = ext_app.info.name or info.name
+        if name in claimed:
+            print(
+                f"warning: extension '{info.name}' claims the command group "
+                f"'{name}', which is already registered; the extension will "
+                f"shadow it. Rename the `typer.Typer(name=...)` in "
+                f"{info.name}.py to keep both.",
+                file=sys.stderr,
+            )
+        claimed.add(name)
         main_app.add_typer(ext_app, name=name)
         registered.append(name)
 
