@@ -72,6 +72,7 @@ from canvas_conductor.config import (
     get_courses,
 )
 from canvas_conductor.exceptions import ConfigError
+from canvas_conductor.utils.dates import to_canvas_datetime
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -257,11 +258,16 @@ def _playbook_schedule(course: str | None) -> dict[str, str]:
 
 
 def _todo_datetime(date_iso: str | None) -> str | None:
-    """Convert a YYYY-MM-DD date string into a Canvas-ready ISO datetime
-    (end-of-day UTC). Returns None for falsy input."""
+    """Convert a YYYY-MM-DD schedule date into a Canvas-ready UTC datetime.
+
+    End-of-day is resolved in the *course's* timezone (`[defaults] timezone`,
+    else the local zone), not UTC. Anchoring at 23:59Z as this used to would
+    put a Mountain Time deadline at 5:59 PM — visibly wrong for the
+    `*_due` keys, which drive real assignment due dates.
+    """
     if not date_iso:
         return None
-    return f"{date_iso}T23:59:00Z"
+    return to_canvas_datetime(date_iso)
 
 
 def _playbook_paths(course: str | None) -> dict[str, Any]:

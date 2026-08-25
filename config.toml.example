@@ -19,6 +19,12 @@ per_page = 100
 # Set to false if you prefer --yes flag workflows.
 confirm_destructive = true
 
+# IANA timezone used to interpret bare calendar dates (`--due 2026-09-15`,
+# `--todo 2026-09-15`). Canvas stores everything in UTC; without this,
+# "Sept 15" would mean 11:59 PM UTC — which is 5:59 PM Mountain, i.e. six
+# hours earlier than anyone intends. Defaults to the machine's local zone.
+timezone = "America/Denver"
+
 
 # Course Definitions
 # ------------------
