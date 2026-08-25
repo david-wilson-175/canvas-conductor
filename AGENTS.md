@@ -58,6 +58,7 @@ canvas-conductor/
 │   ├── exceptions.py       # CanvasError + typed subclasses (Auth/NotFound/…)
 │   ├── models.py           # Pydantic response models (used sparingly)
 │   ├── utils/output.py     # format_output (table/json/csv) and friends
+│   ├── utils/dates.py      # Bare-date → Canvas UTC conversion, tz resolution, shifts
 │   ├── commands/           # One module per command group
 │   │   ├── _common.py      # emit, handle_canvas_error, confirm_or_abort, …
 │   │   ├── pages.py        # ← Best reference for the standard command pattern
@@ -211,6 +212,16 @@ loading and respects the walk-up-to-find-`.env` convention.
 | `parse_kv_list("k=v,k2=v2")` | Parse a comma-separated key=value flag value. |
 | `prefix_keys("wiki_page", {"title": "Hi"})` | Wraps each key in `wiki_page[…]` form for Canvas. Returns a dict you can pass to `client.post(data=…)`. |
 
+`from canvas_conductor.utils.dates import …` — anything touching a date:
+
+| Helper | What it does |
+|---|---|
+| `to_canvas_datetime(value, tz=None, at_time="23:59")` | Bare `YYYY-MM-DD` → UTC ISO anchored at end-of-day *local*. Full ISO datetimes pass through, respecting an explicit offset. Never hand-build a timestamp instead of calling this. |
+| `resolve_timezone(explicit=None)` | `--tz` flag → `[defaults] timezone` → system local → UTC. Raises `ConfigError` on an unknown zone rather than silently shifting every date. |
+| `local_day(value, tz=None)` | Canvas UTC timestamp → `YYYY-MM-DD HH:MM` local, for display. Round-trips back through `to_canvas_datetime`. |
+| `parse_shift("7d")` / `shift_iso(value, delta)` | Duration parsing and None-safe timestamp shifting, shared by `assignments bulk-dates` and `pages bulk-todo`. |
+| `CLEAR` | The empty-string sentinel that clears a Canvas date field. `None` means "leave alone" — `prefix_keys` drops it. |
+
 `from canvas_conductor.utils.output import format_output, format_kv`:
 
 `format_output(items, columns, output_format)` — returns a string in
@@ -292,6 +303,25 @@ These bit us during real work. Save yourself the rediscovery:
 - **Submission types** are arrays: `assignment[submission_types][]` with
   values like `online_upload`, `online_url`, `online_text_entry`. Pass a
   list as the dict value; Canvas accepts the JSON encoding.
+
+- **The page to-do field is asymmetric.** You *write*
+  `wiki_page[student_todo_at]` but *read back* `todo_date`. Grepping the
+  Canvas docs for one name will never surface the other. Discussion topics,
+  confusingly, use `todo_date` for both directions.
+
+- **A to-do date on an unpublished page is inert.** Students never see it.
+  Any command that sets one should check `published` and say so rather than
+  reporting success — see the pre-flight in `pages bulk-todo`.
+
+- **Canvas date fields are cleared with an empty string, not null.**
+  `prefix_keys` drops `None` values (that's how "leave this field alone" is
+  expressed), so a None can never mean "clear". Use `utils.dates.CLEAR`.
+
+- **Never build a timestamp by string concatenation.** `f"{date}T23:59:00Z"`
+  looks right and is off by the UTC offset — in Mountain Time it makes an
+  11:59 PM deadline close at 5:59 PM. Use
+  `utils.dates.to_canvas_datetime(date)`, which resolves the zone from
+  `[defaults] timezone`.
 
 - **The token is teacher-level.** Admin endpoints (account-level reads,
   user provisioning, SIS) will 403. If you encounter a 403, you've hit one

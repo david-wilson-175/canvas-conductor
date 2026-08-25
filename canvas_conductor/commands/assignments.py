@@ -1,13 +1,14 @@
 """Assignment commands: list, show, create, update, delete, duplicate, bulk-dates."""
 from __future__ import annotations
 
-import re
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import typer
 
 from ..client import get_client
 from ..config import get_course_id
+from ..utils.dates import parse_shift as _parse_shift
+from ..utils.dates import shift_iso as _shift_iso
 from ..utils.output import format_output
 from ._common import confirm_or_abort, emit, handle_canvas_error, prefix_keys
 
@@ -215,40 +216,8 @@ def duplicate_assignment(
         raise handle_canvas_error(exc)
 
 
-_DURATION_RE = re.compile(r"^(?P<sign>-?)(?P<n>\d+)(?P<unit>[dhwm])$")
-
-
-def _parse_shift(value: str) -> timedelta:
-    """Parse `7d`, `-3d`, `12h`, `2w`, `30m` into a `timedelta`."""
-    m = _DURATION_RE.match(value.strip())
-    if not m:
-        raise ValueError(
-            f"Invalid shift '{value}'. Examples: 7d, -1d, 12h, 2w, 30m"
-        )
-    sign = -1 if m["sign"] else 1
-    n = int(m["n"]) * sign
-    unit = m["unit"]
-    if unit == "d":
-        return timedelta(days=n)
-    if unit == "h":
-        return timedelta(hours=n)
-    if unit == "w":
-        return timedelta(weeks=n)
-    if unit == "m":
-        return timedelta(minutes=n)
-    raise ValueError(f"Unknown unit: {unit}")  # pragma: no cover
-
-
-def _shift_iso(value: str | None, delta: timedelta) -> str | None:
-    if not value:
-        return None
-    # Canvas returns datetimes in ISO 8601 with 'Z' for UTC.
-    cleaned = value.replace("Z", "+00:00")
-    dt = datetime.fromisoformat(cleaned)
-    new = dt + delta
-    if new.tzinfo is None:
-        new = new.replace(tzinfo=timezone.utc)
-    return new.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+# `_parse_shift` / `_shift_iso` now live in utils.dates so `pages bulk-todo`
+# can share the same date math. Re-exported here under their original names.
 
 
 @app.command("bulk-dates")

@@ -116,6 +116,7 @@ consumed by extensions (e.g., `[courses.is-career-playbook.playbook]`):
 output_format = "table"
 per_page = 100
 confirm_destructive = true
+timezone = "America/Denver"   # interprets bare dates like --todo 2026-09-15
 
 [courses.is566]
 id = 33431
@@ -136,6 +137,20 @@ conductor pages list -c is515
 ```
 
 If only one course is configured, it is used automatically.
+
+### Dates and timezones
+
+Canvas stores every timestamp in UTC. When you pass a bare calendar date —
+`--due 2026-09-15`, `--todo 2026-09-15` — Conductor reads it as **11:59 PM in
+the timezone from `[defaults] timezone`**, falling back to your machine's
+local zone. Getting this wrong is quietly expensive: 11:59 PM UTC is 5:59 PM
+Mountain, so an unconfigured "midnight" deadline actually closes in the late
+afternoon.
+
+Resolution order is `--tz` flag → `[defaults] timezone` → system local → UTC.
+Every command that accepts a bare date also accepts `--at-time HH:MM` to move
+the time of day, and a full ISO-8601 datetime (`2026-09-15T17:00:00-06:00`) is
+always taken exactly as written.
 
 ## Command Reference
 
@@ -178,6 +193,7 @@ conductor modules unpublish -c is402 --id 12345  # Unpublish a module
 
 ```bash
 conductor pages list -c is402                   # List all pages
+conductor pages list -c is402 --has-todo        # Only pages on the student To-Do list
 conductor pages show -c is402 --url welcome     # Show page content
 conductor pages create -c is402 --title "Welcome" --body "<h1>Hello</h1>"
 conductor pages create -c is402 --title "Notes" --file notes.html
@@ -185,6 +201,73 @@ conductor pages update -c is402 --url welcome --body "<h1>Updated</h1>"
 conductor pages delete -c is402 --url welcome
 conductor pages set-front -c is402 --url welcome  # Set as front page
 ```
+
+#### Student To-Do dates
+
+Canvas Pages have no due date. The only way to get a reading onto a student's
+To-Do list (and onto their course calendar) is a **to-do date** — which is
+what BYU's CTL recommends for assigned readings.
+
+```bash
+conductor pages update -c is402 --url week-3-reading --todo 2026-09-15
+conductor pages update -c is402 --url week-3-reading --clear-todo
+conductor pages create -c is402 --title "Reading 1" --file r1.html \
+    --published --todo 2026-09-15
+```
+
+A bare date means 11:59 PM in your configured timezone (see
+[Configuration](#configuration)); `--at-time 08:00` moves it, and `--tz`
+overrides the zone for one call. Full ISO datetimes are passed through as
+given.
+
+Two things worth knowing:
+
+- **A to-do date on an unpublished page is inert.** Students never see it.
+  Conductor warns you rather than failing.
+- Ungraded **discussions** take the same flags (`discussions create --todo`,
+  `discussions update --clear-todo`). Graded topics use their assignment's
+  due date instead, and Canvas rejects a to-do date on one.
+
+#### Bulk To-Do dates
+
+`pages bulk-todo` sets, shifts, or clears to-do dates across many pages in one
+pass. It takes **one selector** (which pages) and **one action** (what date),
+and defaults to a dry run that prints the full before/after plan.
+
+Selectors: `--all`, `--url a,b,c`, `--module "Week 3"`, `--search TERM`, `--file`.
+Actions: `--at DATE`, `--start DATE --every 7d`, `--shift 7d`, `--clear`, `--file`.
+
+```bash
+# Every page in a module goes on the To-Do list the same day
+conductor pages bulk-todo -c is402 --module "Week 3" --at 2026-09-15
+
+# Lay a weekly cadence across every page, in list order
+conductor pages bulk-todo -c is402 --all --start 2026-09-01 --every 7d
+
+# Re-semester an existing schedule: push everything a week later
+conductor pages bulk-todo -c is402 --all --shift 7d --commit -y
+
+# Publish as you go — a to-do on an unpublished page does nothing
+conductor pages bulk-todo -c is402 --all --at 2026-09-15 --publish --commit
+
+# Wipe every to-do date
+conductor pages bulk-todo -c is402 --all --clear --commit
+```
+
+**Spreadsheet round-trip.** `pages list -o csv` writes a `URL` and a `To-Do`
+column that `bulk-todo --file` reads straight back, so a whole semester of
+reading dates can be edited in Excel or Sheets:
+
+```bash
+conductor pages list -c is402 -o csv > schedule.csv
+# edit the To-Do column...
+conductor pages bulk-todo -c is402 --file schedule.csv --dry-run
+conductor pages bulk-todo -c is402 --file schedule.csv --commit
+```
+
+Blank cells are **skipped**, not cleared, so a partially-filled sheet can't
+wipe dates by accident. Pass `--clear-blanks` if you want a blank to mean
+"remove it". JSON from `pages list -o json` works as a `--file` input too.
 
 ### Assignments
 
@@ -251,6 +334,10 @@ conductor discussions list -c is402
 conductor discussions create -c is402 --title "Week 1 Discussion" --message "<p>Introduce yourself</p>"
 conductor discussions update -c is402 --id 12345 --pinned true
 conductor discussions delete -c is402 --id 12345
+
+# Ungraded topics can go on the student To-Do list, same as pages
+conductor discussions create -c is402 --title "Reading response" --todo 2026-09-15 --published
+conductor discussions update -c is402 --id 12345 --clear-todo
 ```
 
 ### Assignment Groups
@@ -373,6 +460,34 @@ conductor assignments bulk-dates -c is402 --shift 7d
 conductor assignments list -c is402 -o csv > dates.csv
 # Edit dates.csv...
 conductor assignments bulk-dates -c is402 --file dates.csv
+```
+
+### Put a semester of readings on the student To-Do list
+
+Canvas Pages have no due date, so assigned readings only show up in a
+student's To-Do list if you give each page a to-do date. Set the whole term
+in one pass, then check your work:
+
+```bash
+# 1. See what's there now
+conductor pages list -c is402 --no-todo
+
+# 2. Lay down a weekly cadence and eyeball the plan before committing
+conductor pages bulk-todo -c is402 --all --start 2026-09-01 --every 7d
+conductor pages bulk-todo -c is402 --all --start 2026-09-01 --every 7d --commit -y
+
+# 3. Or drive it from a spreadsheet when the dates aren't evenly spaced
+conductor pages list -c is402 -o csv > schedule.csv
+conductor pages bulk-todo -c is402 --file schedule.csv --commit
+
+# 4. Confirm every reading landed
+conductor pages list -c is402 --has-todo
+```
+
+Next semester, move the whole schedule instead of rebuilding it:
+
+```bash
+conductor pages bulk-todo -c is402 --all --shift 7d --commit -y
 ```
 
 ### Export grades
