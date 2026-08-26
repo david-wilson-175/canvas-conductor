@@ -80,6 +80,43 @@ similar patterns first. If you're about to write your first extension, read
 `commands/pages.py` end-to-end (it exercises every common pattern: list,
 show, create, update, delete, with bodies-from-files and dry-run).
 
+## Core command group or extension?
+
+Decide this before you write the file. The rule follows the scope statement
+above: **core is generic Canvas capability, extensions are project-specific
+workflow.**
+
+Put it in `commands/` when it wraps a Canvas API surface that any instructor
+would want, and its shape is dictated by the API rather than by your course.
+Register it in `cli.py` with an explicit `add_typer(..., name=...)`.
+
+Put it in `extensions/` when it encodes decisions specific to one course,
+committee, or content pipeline — hardcoded week structures, a particular
+markdown layout, a named media registry. `playbook.py` is the reference case:
+it only makes sense for one real Canvas course.
+
+Two practical consequences of getting this wrong:
+
+- `extensions/` is **private by default in git**. Its `.gitignore` ignores
+  `*.py` and whitelists tracked files by name, so a generic feature parked
+  there has to be explicitly un-ignored just to ship. If you find yourself
+  adding a `!whitelist.py` line for something every user would want, it
+  belongs in `commands/`.
+- Extensions load *after* core groups and silently shadow a core group that
+  shares their name. Generic functionality in the extension namespace makes
+  that collision more likely.
+
+A course sub-resource does not have to live inside its parent's group.
+`tabs`, `sections`, `groups`, `requirements`, and `student-groups` are all
+top-level groups despite hanging off a course. Prefer a new top-level group
+over nesting; no core group nests a sub-group today.
+
+If a tracked extension turns out to be generic, promote it: `git mv` into
+`commands/`, register it in `cli.py` **under the same group name**, and drop
+its `.gitignore` whitelist line. Keeping the name is what makes the promotion
+invisible to users. `requirements` and `student-groups` were promoted this way
+on 2026-08-26.
+
 ## The extension pattern
 
 Drop a file into `canvas_conductor/extensions/`. The discovery loader

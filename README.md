@@ -423,6 +423,21 @@ conductor deploy markdown content/week-1.md -c is402
 - Files starting with `_` are ignored (use `_example.py` as a template)
 - Errors in extension loading print a warning but do not crash the CLI
 
+### Extension or core command group?
+
+Extensions are for **project-specific workflows** — logic that encodes
+decisions about one course, committee, or content pipeline. `playbook.py` is
+the reference case.
+
+Generic Canvas capability belongs in `canvas_conductor/commands/` instead,
+registered in `cli.py`. Note that `extensions/` is private-by-default in git:
+its `.gitignore` ignores `*.py` and whitelists tracked files by name. If you
+are adding a whitelist line for something every user would want, it belongs
+in `commands/`.
+
+See the fuller rule, including how to promote an extension without changing
+its CLI surface, in [AGENTS.md](AGENTS.md).
+
 ## Common Workflows
 
 ### Set up a new course
