@@ -6,6 +6,7 @@ import sys
 import textwrap
 from pathlib import Path
 
+import pytest
 import typer
 from typer.testing import CliRunner
 
@@ -44,6 +45,28 @@ def _cleanup(*paths: Path) -> None:
     for path in paths:
         path.unlink(missing_ok=True)
         sys.modules.pop(f"canvas_conductor.extensions.{path.stem}", None)
+
+
+@pytest.fixture
+def bundled_ext():
+    """A synthetic extension inside the package dir, cleaned up afterwards.
+
+    The suite must not assume any particular extension ships with the repo.
+    `playbook.py` used to be the convenient stand-in; it now lives with the
+    project it serves and is loaded via CONDUCTOR_EXTENSIONS_DIR, so tests
+    that need "a bundled extension" make their own.
+    """
+    path = _write_extension("loader_bundled_fixture", "loader-bundled-fixture")
+    yield "loader-bundled-fixture"
+    _cleanup(path)
+
+
+def test_no_bundled_extensions_is_not_an_error(monkeypatch, capsys):
+    """A clean checkout ships no loadable extensions; that must be silent."""
+    monkeypatch.delenv("CONDUCTOR_EXTENSIONS_DIR", raising=False)
+    registered = ext_pkg.discover_extensions(typer.Typer())
+    assert registered == []
+    assert "warning" not in capsys.readouterr().err
 
 
 def test_collision_with_core_group_warns_and_still_shadows(capsys):
@@ -150,20 +173,20 @@ def _write_external(tmp_dir: Path, stem: str, group_name: str, marker: str = "po
     return path
 
 
-def test_external_dir_unset_behaves_exactly_as_before(monkeypatch, capsys):
+def test_external_dir_unset_behaves_exactly_as_before(monkeypatch, capsys, bundled_ext):
     """No env var means today's behaviour: bundled only, no warning."""
     monkeypatch.delenv("CONDUCTOR_EXTENSIONS_DIR", raising=False)
     main = typer.Typer()
     registered = ext_pkg.discover_extensions(main)
-    assert "playbook" in registered  # the bundled extension still loads
+    assert bundled_ext in registered  # bundled extensions still load
     assert "warning" not in capsys.readouterr().err
 
 
-def test_external_dir_empty_string_is_ignored(monkeypatch, capsys):
+def test_external_dir_empty_string_is_ignored(monkeypatch, capsys, bundled_ext):
     monkeypatch.setenv("CONDUCTOR_EXTENSIONS_DIR", "")
     main = typer.Typer()
     registered = ext_pkg.discover_extensions(main)
-    assert "playbook" in registered
+    assert bundled_ext in registered  # bundled extensions still load
     assert "warning" not in capsys.readouterr().err
 
 
@@ -190,24 +213,24 @@ def test_external_dir_extension_is_actually_invocable(monkeypatch, tmp_path):
     assert "external-ok" in result.output
 
 
-def test_external_dir_missing_path_warns_but_cli_survives(monkeypatch, tmp_path, capsys):
+def test_external_dir_missing_path_warns_but_cli_survives(monkeypatch, tmp_path, capsys, bundled_ext):
     monkeypatch.setenv("CONDUCTOR_EXTENSIONS_DIR", str(tmp_path / "does-not-exist"))
     main = typer.Typer()
     registered = ext_pkg.discover_extensions(main)
     err = capsys.readouterr().err
     assert "warning" in err
     assert "does-not-exist" in err
-    assert "playbook" in registered  # bundled extensions still loaded
+    assert bundled_ext in registered  # bundled extensions still load
 
 
-def test_external_dir_pointing_at_a_file_warns(monkeypatch, tmp_path, capsys):
+def test_external_dir_pointing_at_a_file_warns(monkeypatch, tmp_path, capsys, bundled_ext):
     target = tmp_path / "not-a-dir.txt"
     target.write_text("x")
     monkeypatch.setenv("CONDUCTOR_EXTENSIONS_DIR", str(target))
     main = typer.Typer()
     registered = ext_pkg.discover_extensions(main)
     assert "warning" in capsys.readouterr().err
-    assert "playbook" in registered
+    assert bundled_ext in registered  # bundled extensions still load
 
 
 def test_external_underscore_files_are_skipped(monkeypatch, tmp_path):
@@ -257,7 +280,7 @@ def test_external_group_name_collision_still_warns(monkeypatch, tmp_path, capsys
     assert "warning" in capsys.readouterr().err
 
 
-def test_external_broken_extension_does_not_crash_cli(monkeypatch, tmp_path, capsys):
+def test_external_broken_extension_does_not_crash_cli(monkeypatch, tmp_path, capsys, bundled_ext):
     ext_dir = tmp_path / "ext"
     ext_dir.mkdir()
     (ext_dir / "loader_broken.py").write_text("raise RuntimeError('boom')\n")
@@ -269,4 +292,4 @@ def test_external_broken_extension_does_not_crash_cli(monkeypatch, tmp_path, cap
     err = capsys.readouterr().err
     assert "warning" in err
     assert "loader_broken" in err
-    assert "playbook" in registered  # everything else still loaded
+    assert bundled_ext in registered  # bundled extensions still load

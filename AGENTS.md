@@ -65,10 +65,9 @@ canvas-conductor/
 │   │   ├── modules.py
 │   │   ├── files.py
 │   │   └── …
-│   └── extensions/
+│   └── extensions/         # Private by default; also scans CONDUCTOR_EXTENSIONS_DIR
 │       ├── __init__.py     # Auto-discovery loader (don't edit unless fixing it)
-│       ├── _example.py     # Minimal extension template
-│       └── playbook.py     # ← Best reference for a real, multi-command extension
+│       └── _example.py     # Minimal extension template (the only tracked one)
 ├── config.toml             # Course aliases + [defaults] + project-specific sections
 ├── .env                    # Credentials (gitignored)
 ├── pyproject.toml          # Deps + the `conductor` script entry point
@@ -213,7 +212,9 @@ Required pieces:
   This produces consistent exit codes per error class.
 
 For a richer example that includes file uploads, complex per-call payloads,
-and post-processing of HTML, read `extensions/playbook.py`.
+and post-processing of HTML, read `commands/student_groups.py` (idempotent
+find-or-create against existing course state) or `commands/requirements.py`
+(bulk selection with a plan table and per-item error handling).
 
 Files dropped into `extensions/` are git-ignored by default (the local
 `.gitignore` allowlists tracked examples). If you're writing an extension
@@ -261,7 +262,7 @@ Errors raise typed exceptions:
 | Function | Use it for |
 |---|---|
 | `get_course_id(course_key: str \| None) -> int` | The only correct way to resolve `--course`. Auto-uses the single configured course if `course_key` is None and exactly one is defined. Raises `ConfigError` with a helpful message otherwise. |
-| `get_config() -> dict` | Whole parsed `config.toml` (lru-cached). Use it to read project-specific sections like `[playbook]`. |
+| `get_config() -> dict` | Whole parsed `config.toml` (lru-cached). Use it to read project-specific sections, e.g. `[courses.<alias>.playbook]`. |
 | `find_config_file() -> Path \| None` | Walks upward from cwd to find `config.toml`. Useful for resolving paths that are stored in TOML relative to the config file's location. |
 | `require_credentials() -> tuple[str, str]` | Returns `(base_url, token)` or raises `ConfigError`. Usually called for you by `get_client()`; only call directly if you need raw credentials. |
 | `redact_token(token) -> str` | Redacts a token for safe logging. Use it any time you might print credentials. |
@@ -524,8 +525,9 @@ case (Canvas 404 or 422) so the error formatting is exercised.
 Three places to look, in order:
 1. `commands/pages.py` — covers the standard CRUD command pattern with
    bodies-from-files, dry-run, and bracket-key payloads.
-2. `extensions/playbook.py` — covers a multi-command extension with file
-   uploads, custom HTML rendering, and idempotent reuse-by-name.
+2. `commands/student_groups.py` — covers a multi-command group with CSV
+   input, identifier-format handling, and idempotent reuse-by-name against
+   existing course state.
 3. `client.py` — read it once. The whole file fits on screen and explains
    how pagination, retries, rate limits, and the two-step upload work.
 
