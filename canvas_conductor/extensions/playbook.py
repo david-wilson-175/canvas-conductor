@@ -12,7 +12,7 @@ What the IS Career Playbook is
 ------------------------------
 A 5-week, completion-graded supplement that lives inside an Information
 Systems course at BYU. Each week pairs a markdown content page with one assignment and
-a set of NotebookLM-generated media (audio companion, deep-dive videos,
+a set of NotebookLM-generated media (audio overview, deep-dive videos,
 infographics):
 
     Step 1  Optimize Your Resume
@@ -150,23 +150,31 @@ ASSIGNMENTS: dict[str, dict[str, Any]] = {
 #   any other anchor is matched as a substring against `<!-- MEDIA: ... -->`
 #   placeholder comments in the source markdown.
 MEDIA_PLACEMENTS: dict[str, list[tuple[str, str, str, str]]] = {
+    "getting_started": [
+        ("Scripture banner", "gs-scripture-banner.jpg",
+         "If ye are prepared ye shall not fear (D&C 38:30)", "image"),
+    ],
     "week_1": [
         ("TOP", "w1-podcast.mp4",
-         "Listen on the go: Quantify your impact to beat algorithms (optional audio companion)", "audio"),
-        ("Explainer video (NotebookLM, 2-3 min)", "w1-ats-deep-dive.mp4",
-         "Watch: SEO For Your Resume (ATS Deep Dive)", "video"),
-        ("Before/After Tear-Down (static visual) — Pre-program experience",
-         "w1-reframing-experience.mp4",
-         "Watch: The Experience Makeover", "video"),
-        ("Before/After Tear-Down (static visual) — Pre-program experience",
-         "w1-before-after-teardown.png",
-         "Resume Impact Formula Guide", "image"),
-        ("Good/Better/Best (static visual)", "w1-good-better-best.png",
-         "Resume Bullet Writing Framework", "image"),
+         "Listen on the go: Quantify your impact to beat algorithms (optional audio overview)", "audio"),
+        ("ATS infographic", "w1-ats-infographic.png",
+         "What an ATS Does with Your Resume", "image"),
+        ("Be Specific infographic", "w1-be-specific.png",
+         "Be Specific: Achievement Comparison", "image"),
+        ("ATS review example", "w1-ats-review-example.png",
+         "Mock ATS Review: Data Analytics Role", "image"),
+        ("Edit bullets meme", "w1-edit-bullets-meme.png",
+         "Please. Edit your ChatGPT bullets.", "image"),
+        ("Uchtdorf banner", "w1-uchtdorf-banner.jpg",
+         "A Note of Encouragement", "image"),
+        ("Resume Formatting Tips", "w1-resume-formatting-tips.mp4",
+         "Video: Resume Formatting Tips", "video"),
+        ("Resume Content Strategy", "w1-resume-content-strategy.mp4",
+         "Video: Resume Content Strategy", "video"),
     ],
     "week_2": [
         ("TOP", "w2-podcast.mp4",
-         "Listen on the go: Turn Your LinkedIn Into a Billboard (optional audio companion)", "audio"),
+         "Listen on the go: Turn Your LinkedIn Into a Billboard (optional audio overview)", "audio"),
         ("Before/After Tear-Down (static visual) — Default/empty LinkedIn",
          "w2-linkedin-before-after.png",
          "LinkedIn Profile Optimization Strategy Comparison", "image"),
@@ -175,23 +183,25 @@ MEDIA_PLACEMENTS: dict[str, list[tuple[str, str, str, str]]] = {
     ],
     "week_3": [
         ("TOP", "w3-podcast.mp4",
-         "Listen on the go: Landing tech jobs with a proof layer (optional audio companion)", "audio"),
+         "Listen on the go: Landing tech jobs with a proof layer (optional audio overview)", "audio"),
         ("Work Experience Snapshot", "w3-experience-snapshot.png",
          "The Experience Gap Comparison", "image"),
     ],
     "week_4": [
         ("TOP", "w4-podcast.mp4",
-         "Listen on the go: Nail Your Interview with PBF and PAR (optional audio companion)", "audio"),
+         "Listen on the go: Nail Your Interview with PBF and PAR (optional audio overview)", "audio"),
         ("Cinematic Overview (NotebookLM, 2-4 min)", "w4-par-deep-dive.mp4",
          "Watch: Mastering the PAR Framework", "video"),
     ],
     "week_5": [
         ("TOP", "w5-podcast.mp4",
-         "Listen on the go: Beat the automated job rejection machine (optional audio companion)", "audio"),
+         "Listen on the go: Beat the automated job rejection machine (optional audio overview)", "audio"),
         ("Career Fair Cheat Card", "w5-career-fair-cheat-card.png",
          "Career Fair Preparation Cheat Card", "image"),
         ("Audio Overview (NotebookLM podcast", "w5-four-step-job-search.mp4",
          "Watch: Bypassing Auto-Rejection (Four-Step Job Search)", "video"),
+        ("Recruiting Timeline", "w5-timeline.jpg",
+         "Your Recruiting Timeline", "image"),
     ],
 }
 
@@ -328,7 +338,7 @@ DELIVERABLE_PANEL_STYLE = ("margin: 2.5rem 0; padding: 1.5rem 1.75rem; "
 DELIVERABLE_HEADING_STYLE = ("margin: 0 0 1rem; padding-bottom: 0.5rem; "
                              "border-bottom: 1px solid #bfdbfe; color: #1d4ed8;")
 FIGURE_STYLE = "margin: 2rem auto; text-align: center;"
-FIGURE_IMG_STYLE = ("display: block; max-width: 60%; height: auto; "
+FIGURE_IMG_STYLE = ("display: block; max-width: 100%; width: 700px; height: auto; "
                     "margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 0.5rem;")
 FIGURE_VIDEO_STYLE = ("display: block; width: 100%; max-width: 640px; height: 360px; "
                       "margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 0.5rem;")
@@ -336,6 +346,34 @@ FIGURE_AUDIO_STYLE = ("display: block; width: 100%; max-width: 480px; height: 14
                       "margin: 0 auto; border: 0;")
 FIGCAPTION_STYLE = ("margin-top: 0.75rem; font-style: italic; "
                     "color: #6b7280; font-size: 0.9em;")
+
+# "In this episode" chapter list, rendered directly beneath a TOP audio embed.
+#
+# Width math, so the two numbers below stay in sync if either is edited:
+# the panel's content box is 640px; the timestamp column is 3.4em, which at the
+# list's 0.92em of a 16px base is ~50px; that leaves ~590px for the label, and
+# this font averages ~7px per character, so roughly 83 characters fit on a line.
+# CHAPTERS_MAX_LABEL_CHARS is set below that with headroom for wide glyphs, so
+# labels do not wrap at desktop width.
+#
+# Do NOT reintroduce a hanging indent here. The obvious version (padding-left
+# with a matching negative text-indent on the li) renders BROKEN in Canvas:
+# Canvas's content stylesheet overrides list-item padding at render time, so
+# the negative text-indent survives with nothing to cancel it and the
+# timestamps hang outside the panel border. Tried and reverted 2026-08-25.
+# A wrapped label on a narrow phone simply returns to the panel's left edge,
+# which is untidy but stays in bounds.
+CHAPTERS_MAX_LABEL_CHARS = 72
+CHAPTERS_PANEL_STYLE = ("margin: -0.5rem auto 2.5rem; padding: 1rem 1.25rem; "
+                        "max-width: 640px; background: #f8fafc; "
+                        "border: 1px solid #e2e8f0; border-radius: 0.5rem;")
+CHAPTERS_LABEL_STYLE = "margin: 0 0 0.6rem; color: #475569; font-size: 0.85em;"
+CHAPTERS_LIST_STYLE = ("margin: 0; padding: 0; list-style: none; "
+                       "font-size: 0.92em; line-height: 1.55;")
+CHAPTERS_ITEM_STYLE = "margin: 0 0 0.35rem;"
+# No font-variant-numeric here: Canvas strips it (see README sanitizer table).
+# min-width keeps the timestamps in a column without it.
+CHAPTERS_TIME_STYLE = "display: inline-block; min-width: 3.4em; color: #1d4ed8;"
 
 
 def _build_embed(course_id: int, file_id: int, title: str, kind: str) -> str:
@@ -346,8 +384,10 @@ def _build_embed(course_id: int, file_id: int, title: str, kind: str) -> str:
     """
     if kind == "image":
         media = (
+            f'<a href="/courses/{course_id}/files/{file_id}/download" '
+            f'target="_blank" title="Click to view full size">'
             f'<img src="/courses/{course_id}/files/{file_id}/preview" '
-            f'alt="{title}" style="{FIGURE_IMG_STYLE}">'
+            f'alt="{title}" style="{FIGURE_IMG_STYLE}"></a>'
         )
     else:
         media_type = "video" if kind == "video" else "audio"
@@ -368,6 +408,55 @@ def _build_embed(course_id: int, file_id: int, title: str, kind: str) -> str:
     )
 
 
+def _extract_chapters(content: str) -> tuple[list[tuple[str, str]], str]:
+    """Pull a `<!-- CHAPTERS: ... -->` block out of the markdown.
+
+    Each line inside the block is `M:SS — Label` (em dash or hyphen). Returns
+    the parsed [(timestamp, label), ...] plus the markdown with the block
+    removed, since the list is rendered beneath the audio player rather than
+    wherever the comment happened to sit.
+    """
+    m = re.search(r'<!--\s*CHAPTERS:\s*(.*?)-->', content, flags=re.DOTALL)
+    if not m:
+        return [], content
+
+    chapters: list[tuple[str, str]] = []
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parsed = re.match(r'^(\d{1,2}:\d{2})\s*(?:—|–|-)\s*(.+)$', line)
+        if parsed:
+            label = parsed.group(2).strip()
+            if len(label) > CHAPTERS_MAX_LABEL_CHARS:
+                emit(f"  WARN: chapter label is {len(label)} chars, over the "
+                     f"{CHAPTERS_MAX_LABEL_CHARS}-char limit, and will wrap: "
+                     f"{label!r}")
+            chapters.append((parsed.group(1), label))
+        else:
+            emit(f"  WARN: unparsable CHAPTERS line (skipping): {line!r}")
+
+    return chapters, content[:m.start()] + content[m.end():]
+
+
+def _build_chapters_block(chapters: list[tuple[str, str]]) -> str:
+    """Render the chapter list as a compact panel for beneath the player."""
+    from html import escape
+
+    items = "".join(
+        f'<li style="{CHAPTERS_ITEM_STYLE}">'
+        f'<strong style="{CHAPTERS_TIME_STYLE}">{escape(ts)}</strong>'
+        f'{escape(label)}</li>'
+        for ts, label in chapters
+    )
+    return (
+        f'<div style="{CHAPTERS_PANEL_STYLE}">'
+        f'<p style="{CHAPTERS_LABEL_STYLE}"><strong>In this episode</strong></p>'
+        f'<ul style="{CHAPTERS_LIST_STYLE}">{items}</ul>'
+        f'</div>'
+    )
+
+
 def _style_html(raw_html: str) -> str:
     """Apply modern inline styling: typography, callouts, panels, figures."""
     from bs4 import BeautifulSoup, NavigableString
@@ -384,6 +473,32 @@ def _style_html(raw_html: str) -> str:
         h3["style"] = H3_STYLE
     for hr in soup.find_all("hr"):
         hr["style"] = HR_STYLE
+
+    # Image sizing: make content images fill the available width
+    for img in soup.find_all("img"):
+        existing = img.get("style", "")
+        if "width" not in existing:
+            img["style"] = (
+                "display: block; max-width: 100%; width: 700px; "
+                "height: auto; margin: 1rem auto; border-radius: 0.25rem;"
+            )
+
+    # Table styling: better padding and separation
+    for table in soup.find_all("table"):
+        table["style"] = (
+            "border-collapse: collapse; width: 100%; margin: 1rem 0; "
+            "font-size: 0.95rem;"
+        )
+    for th in soup.find_all("th"):
+        th["style"] = (
+            "border: 1px solid #d1d5db; padding: 0.6rem 1rem; "
+            "background: #f3f4f6; text-align: left; font-weight: 600;"
+        )
+    for td in soup.find_all("td"):
+        td["style"] = (
+            "border: 1px solid #d1d5db; padding: 0.6rem 1rem; "
+            "vertical-align: top;"
+        )
 
     # Blockquote styling: meta vs default
     for bq in soup.find_all("blockquote"):
@@ -420,19 +535,19 @@ def _style_html(raw_html: str) -> str:
         p.decompose()
         nxt.decompose()
 
-    # Pro tip: <p><strong>Pro tip:</strong> rest...</p>
+    # Tip: <p><strong>Tip:</strong> rest...</p>  (also matches legacy "Pro tip:")
     for p in list(soup.find_all("p")):
         if not p.parent:
             continue
         strong = p.find("strong")
         if not strong:
             continue
-        if strong.get_text().strip().rstrip(":").lower() != "pro tip":
+        if strong.get_text().strip().rstrip(":").lower() not in ("pro tip", "tip"):
             continue
         container = soup.new_tag("div", style=TIP_PANEL_STYLE)
         label = soup.new_tag("div", style=TIP_LABEL_STYLE)
         label_strong = soup.new_tag("strong")
-        label_strong.append(NavigableString("💡  Pro tip"))
+        label_strong.append(NavigableString("💡  Tip"))
         label.append(label_strong)
         container.append(label)
         new_p = soup.new_tag("p", style="margin: 0;")
@@ -500,6 +615,10 @@ def _md_to_canvas_html(
 
     content = md_path.read_text()
 
+    # Pull the audio chapter list out early — it renders under the TOP player,
+    # not at the point in the markdown where the comment sits.
+    chapters, content = _extract_chapters(content)
+
     # Group placements by anchor (preserve list order within each group)
     by_anchor: dict[str, list[tuple[str, str, str]]] = {}
     for anchor, fname, title, kind in placements:
@@ -544,11 +663,39 @@ def _md_to_canvas_html(
                 emit(f"  WARN: no Canvas file id for TOP embed '{fname}'")
                 continue
             top_blocks.append(_build_embed(course_id, fid, title, kind))
+            # The chapter list belongs to the audio overview, so it trails the
+            # first audio embed rather than the whole TOP group.
+            if chapters and kind == "audio":
+                top_blocks.append(_build_chapters_block(chapters))
+                chapters = []
         if top_blocks:
             top_html = "\n\n" + "\n".join(top_blocks) + "\n\n"
             content, n = re.subn(r'(?m)^(## )', top_html + r'\1', content, count=1)
             if n == 0:
                 content = top_html + content
+
+    # Convert **EMBED VIDEO: [title](box_url)** to styled video link buttons.
+    # Box shared links require BYU SSO auth, so iframe embeds don't work.
+    # Render as prominent link buttons instead.
+    def _video_link(m: re.Match) -> str:
+        title = m.group(1)
+        url = m.group(2)
+        return (
+            f'<div style="margin: 1.5rem 0; padding: 1rem 1.25rem; '
+            f'background: #f8fafc; border: 1px solid #e2e8f0; '
+            f'border-radius: 0.5rem; text-align: center;">'
+            f'<a href="{url}" target="_blank" '
+            f'style="font-weight: 600; font-size: 1.05em; '
+            f'color: #1d4ed8; text-decoration: none;">'
+            f'▶️  {title}</a>'
+            f'</div>'
+        )
+
+    content = re.sub(
+        r'\*\*EMBED VIDEO:\s*\[([^\]]+)\]\((https?://byu\.box\.com/s/[^)]+)\)\*\*',
+        _video_link,
+        content,
+    )
 
     content = re.sub(r'\n{3,}', '\n\n', content)
 
@@ -699,7 +846,12 @@ def _upload_manifest() -> list[tuple[str, str]]:
             if fname in seen:
                 continue
             seen.add(fname)
-            ct = "image/png" if fname.endswith(".png") else "video/mp4"
+            if fname.endswith(".png"):
+                ct = "image/png"
+            elif fname.endswith((".jpg", ".jpeg")):
+                ct = "image/jpeg"
+            else:
+                ct = "video/mp4"
             out.append((fname, ct))
     return out
 
@@ -893,7 +1045,10 @@ def deploy(
                 emit(f"  module: created id={gs_module_id}")
 
             if gs_content_path.is_file():
-                gs_body = _md_to_canvas_html(gs_content_path, cid, [], file_ids)
+                gs_body = _md_to_canvas_html(
+                    gs_content_path, cid,
+                    MEDIA_PLACEMENTS.get("getting_started", []), file_ids,
+                )
                 existing_pages = client.get_all(
                     f"/courses/{cid}/pages",
                     params={"search_term": GETTING_STARTED_PAGE_TITLE},
@@ -1039,7 +1194,11 @@ def deploy(
                         "grading_type": "pass_fail",
                         "published": False,
                         "description":
-                            f"<p>See the {module_name} page for full instructions.</p>",
+                            f"<p>See the {module_name} page for full instructions.</p>"
+                            '<p><em>The due date is a recommended pacing date. '
+                            'Canvas marks later submissions as "late," but they '
+                            'still earn full credit — what matters is completing '
+                            'all five steps by the final (Step 5) deadline.</em></p>',
                         "submission_types":
                             asgn_meta.get("submission_types", ["online_text_entry"]),
                     }
@@ -1121,6 +1280,28 @@ def sync_pages(
 
         existing_pages = client.get_all(f"/courses/{cid}/pages")
         page_map = {p["title"]: p["url"] for p in existing_pages}
+
+        # Getting Started page (no --week filter; always included unless
+        # the user explicitly filters to a specific week_N key).
+        if not week:
+            gs_content_path = paths["content_dir"] / GETTING_STARTED_CONTENT_FILE
+            if gs_content_path.is_file() and GETTING_STARTED_PAGE_TITLE in page_map:
+                gs_body = _md_to_canvas_html(
+                    gs_content_path, cid,
+                    MEDIA_PLACEMENTS.get("getting_started", []), file_ids,
+                )
+                gs_slug = page_map[GETTING_STARTED_PAGE_TITLE]
+                tag = "[DRY-RUN] " if dry_run else ""
+                emit(f"  {tag}{GETTING_STARTED_PAGE_TITLE}: {len(gs_body)} chars -> {gs_slug}")
+                if not dry_run:
+                    client.put(
+                        f"/courses/{cid}/pages/{gs_slug}",
+                        {"wiki_page": {"body": gs_body}},
+                    )
+            elif not gs_content_path.is_file():
+                emit(f"  SKIP: {GETTING_STARTED_CONTENT_FILE} not found")
+            elif GETTING_STARTED_PAGE_TITLE not in page_map:
+                emit(f"  WARN: no page '{GETTING_STARTED_PAGE_TITLE}' on Canvas — run `playbook deploy` first")
 
         for week_key, module_name, content_filename in WEEKS:
             if week and week_key != week:
