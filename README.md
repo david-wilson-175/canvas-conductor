@@ -423,6 +423,22 @@ conductor deploy markdown content/week-1.md -c is402
 - Files starting with `_` are ignored (use `_example.py` as a template)
 - Errors in extension loading print a warning but do not crash the CLI
 
+### Extensions outside the repo
+
+Point `CONDUCTOR_EXTENSIONS_DIR` at a directory and its `*.py` files are
+discovered alongside the bundled ones, so a project-specific extension can
+live with the project it serves rather than inside this repo:
+
+```bash
+export CONDUCTOR_EXTENSIONS_DIR="$HOME/some-project/extensions"
+conductor --help          # its command group now appears
+```
+
+Unset or empty means today's behaviour. A bad path warns on stderr and the
+CLI keeps working. A file with the same name as a bundled extension overrides
+it; two different modules claiming the same group name warn and the later one
+shadows. Details in [AGENTS.md](AGENTS.md).
+
 ### Extension or core command group?
 
 Extensions are for **project-specific workflows** — logic that encodes

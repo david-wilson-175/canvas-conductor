@@ -124,6 +124,38 @@ imports it and registers any module-level `app = typer.Typer(...)` as a
 subcommand group. Files starting with `_` are skipped (use them for
 templates or shared helpers).
 
+### Extensions that live outside the repo
+
+Set `CONDUCTOR_EXTENSIONS_DIR` to a directory and the loader scans it too,
+after the bundled ones. This is the counterpart to `CONDUCTOR_CONFIG`: it
+lets a project-specific extension live with the project it serves instead of
+inside this general-purpose repo.
+
+```bash
+export CONDUCTOR_EXTENSIONS_DIR="$HOME/some-project/extensions"
+```
+
+Semantics:
+
+- Unset or empty behaves exactly as before. No warning.
+- A path that is missing, or is a file rather than a directory, produces one
+  stderr warning; the bundled extensions and the whole core CLI still load.
+- Files starting with `_` are skipped there too.
+- A module that raises on import warns and is skipped, like a bundled one.
+
+Two clashes, handled differently:
+
+- **Same filename in both directories** is an *override*, not a conflict.
+  The external file wins, loads exactly once, and nothing is warned. This is
+  how you replace a bundled extension locally.
+- **Two different modules claiming the same Typer group name** is a real
+  collision, warns on stderr, and the later registration shadows the earlier
+  one, exactly as before.
+
+Extensions loaded this way are location-independent: paths inside them should
+resolve against the config file (`find_config_file()`) or absolute config
+values, never against `__file__`.
+
 Minimum viable extension:
 
 ```python

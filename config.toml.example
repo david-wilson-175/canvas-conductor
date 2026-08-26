@@ -53,8 +53,12 @@ term = "Fall 2026"
 # term = "Fall 2026"
 
 
-# Playbook extension paths (only needed if you use the bundled
-# `playbook` extension at canvas_conductor/extensions/playbook.py).
+# Playbook extension paths (only needed if you use the `playbook` extension).
+#
+# The playbook extension is project-specific and is NOT bundled with this
+# repo. Point CONDUCTOR_EXTENSIONS_DIR at the directory holding it:
+#
+#     export CONDUCTOR_EXTENSIONS_DIR="$HOME/my-project/extensions"
 #
 # Per-course nesting: each course that uses the extension gets its own
 # [courses.<alias>.playbook] block. The course alias is whatever you pass
