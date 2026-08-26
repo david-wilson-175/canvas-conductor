@@ -20,7 +20,9 @@ from .commands import (
     groups,
     modules,
     pages,
+    requirements,
     sections,
+    student_groups,
     submissions,
     tabs,
 )
@@ -71,6 +73,12 @@ app.add_typer(tabs.app, name="tabs")
 app.add_typer(discussions.app, name="discussions")
 app.add_typer(groups.app, name="groups")
 app.add_typer(config_cmds.app, name="config")
+# Promoted from extensions/ (2026-08-26): both are generic Canvas capabilities
+# rather than project-specific workflows, so they belong in the core surface.
+# Names must stay exactly as they were when auto-discovered, or every existing
+# `conductor requirements ...` / `conductor student-groups ...` invocation breaks.
+app.add_typer(requirements.app, name="requirements")
+app.add_typer(student_groups.app, name="student-groups")
 
 # User-defined extensions (drop *.py files in canvas_conductor/extensions/).
 discover_extensions(app)

@@ -1,11 +1,16 @@
 """Module item completion requirements: must-view, must-submit, must-mark-done,
 min-score, and min-percentage.
 
-Canvas Conductor's core `modules` command group can publish/unpublish modules
-and list their items, but nothing in `commands/modules.py` can set a
-*completion requirement* on an individual module item — the thing that gives
-a reading, quiz, or assignment a checkbox on the Modules page and makes it
-count toward "Student Progress." This extension fills that gap.
+The `modules` command group can publish/unpublish modules and list their
+items, but nothing in `commands/modules.py` can set a *completion
+requirement* on an individual module item — the thing that gives a reading,
+quiz, or assignment a checkbox on the Modules page and makes it count toward
+"Student Progress." This group fills that gap.
+
+Kept as its own top-level group rather than folded into `modules`, matching
+how `tabs`, `sections`, and `groups` are separate groups despite being course
+sub-resources. Originally contributed as an extension and promoted to the core
+surface on 2026-08-26; the CLI surface did not change in the move.
 
 Canvas API background
 ----------------------
@@ -31,7 +36,7 @@ A few gotchas worth knowing before you script this at scale:
 - `must_submit` requires the item to actually accept a submission
   (an Assignment, Quiz, or graded Discussion with a real submission type).
   Setting it on a `SubHeader` or a no-submission assignment will fail
-  (422) — this extension skips `SubHeader` items automatically and reports
+  (422) — these commands skip `SubHeader` items automatically and report
   any other rejection per-item rather than aborting the whole batch.
 - A requirement on an item inside an *unpublished* module, or on an
   unpublished item, is inert: students see no checkbox and no progress is
