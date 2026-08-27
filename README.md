@@ -386,6 +386,24 @@ conductor modules list -c is402 -o csv > modules.csv
 
 Canvas Conductor supports user-defined extensions. Drop a Python file into the `extensions/` directory to add custom commands.
 
+> **Note for anyone upgrading past `5a5c520` (2026-08-26): the `playbook`
+> extension no longer ships with this repo.** It was BYU-specific (hardcoded
+> week structure, a named media registry, one particular Canvas course) and now
+> lives with the project it serves, loaded via
+> [`CONDUCTOR_EXTENSIONS_DIR`](#extensions-outside-the-repo).
+>
+> Because it was a tracked file, `git pull` will delete your copy. Nothing else
+> changed: `extensions/` is still scanned by default, and your own extensions
+> there are still gitignored and still load exactly as before. If you were
+> using `playbook`, recover it with:
+>
+> ```bash
+> git show 62691b3:canvas_conductor/extensions/playbook.py > /path/to/your/extensions/playbook.py
+> export CONDUCTOR_EXTENSIONS_DIR=/path/to/your/extensions
+> ```
+>
+> `_example.py` remains as the extension template.
+
 ### Writing an Extension
 
 Create a file in `canvas_conductor/extensions/` (skip files starting with `_`):
