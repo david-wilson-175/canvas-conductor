@@ -13,6 +13,7 @@ uv.lock
 # user-specific). Track `config.toml.example` instead — copy it to
 # `config.toml` locally and edit.
 config.toml
+config.toml.local-disabled
 
 # Local spec/handoff materials and live-test config (never committed).
 spec/
