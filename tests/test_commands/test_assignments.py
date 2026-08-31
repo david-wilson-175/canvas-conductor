@@ -1,6 +1,7 @@
 """Assignment command smoke tests, including bulk-dates date math."""
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 
 import pytest
@@ -48,6 +49,53 @@ def test_assignments_list(write_config, mock_responses, api):
     result = runner.invoke(app, ["assignments", "list"])
     assert result.exit_code == 0, result.output
     assert "HW1" in result.output
+
+
+def _update_payload(mock_responses) -> dict:
+    """Return the assignment body of the last PUT the CLI made."""
+    body = json.loads(mock_responses.calls[-1].request.body)
+    return body["assignment"]
+
+
+def test_update_individual_grading_on(write_config, mock_responses, api):
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/7", json={"id": 7, "name": "Proj"})
+    result = runner.invoke(
+        app, ["assignments", "update", "--id", "7", "--individual-grading"]
+    )
+    assert result.exit_code == 0, result.output
+    assert _update_payload(mock_responses)["grade_group_students_individually"] is True
+
+
+def test_update_group_grading_sends_false(write_config, mock_responses, api):
+    """False must survive prefix_keys, which drops None but not False."""
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/7", json={"id": 7, "name": "Proj"})
+    result = runner.invoke(
+        app, ["assignments", "update", "--id", "7", "--group-grading"]
+    )
+    assert result.exit_code == 0, result.output
+    assert _update_payload(mock_responses)["grade_group_students_individually"] is False
+
+
+def test_update_without_flag_leaves_setting_alone(write_config, mock_responses, api):
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/7", json={"id": 7, "name": "Proj"})
+    result = runner.invoke(
+        app, ["assignments", "update", "--id", "7", "--name", "Renamed"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "grade_group_students_individually" not in _update_payload(mock_responses)
+
+
+def test_update_404_is_formatted(write_config, mock_responses, api):
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/404", json={"errors": []}, status=404)
+    result = runner.invoke(
+        app, ["assignments", "update", "--id", "404", "--individual-grading"]
+    )
+    assert result.exit_code == 5
+    assert "not found" in result.output.lower() + result.stderr.lower()
 
 
 def test_bulk_dates_dry_run(write_config, mock_responses, api):

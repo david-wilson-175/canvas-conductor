@@ -277,7 +277,14 @@ conductor assignments create -c is402 --name "Resume" --points 10 --type online_
 conductor assignments update -c is402 --id 12345 --due "2026-07-01T23:59:00Z"
 conductor assignments delete -c is402 --id 12345
 conductor assignments bulk-dates -c is402 --shift 7d  # Shift all due dates by 7 days
+
+# Group assignments: one grade for the whole group, or a grade per member
+conductor assignments update -c is402 --id 12345 --individual-grading
+conductor assignments update -c is402 --id 12345 --group-grading
 ```
+
+Omit both flags and the setting is left alone — see
+[Grade a group assignment with per-student exceptions](#grade-a-group-assignment-with-per-student-exceptions).
 
 ### Files
 
@@ -296,6 +303,14 @@ conductor submissions grade -c is402 --assignment 12345 --user 67890 --grade "pa
 conductor submissions bulk-grade -c is402 --assignment 12345 --file grades.csv
 conductor submissions download -c is402 --assignment 12345 --dir ./submissions
 ```
+
+`bulk-grade` takes a CSV of `user_id,grade[,comment]`, defaults to a dry run,
+and pre-flights the assignment before either previewing or committing. If the
+target is a **group assignment that pools one grade per group**, it refuses:
+Canvas would apply every row to the whole group, so per-student grades in your
+CSV would be silently overwritten by whichever row for that group landed last.
+The fix it names is `assignments update --individual-grading`. Pass
+`--allow-group-propagation` if one grade per group really is what you want.
 
 ### Enrollments
 
@@ -544,6 +559,40 @@ conductor pages bulk-todo -c is402 --all --shift 7d --commit -y
 ```bash
 conductor submissions list -c is402 --assignment 12345 -o csv > grades.csv
 ```
+
+### Grade a group assignment with per-student exceptions
+
+Canvas gives you two modes on a group assignment: one pooled grade for the
+whole group, or a grade per member. In SpeedGrader those feel mutually
+exclusive — it shows one grade box per group — so the usual workaround is to
+grade the group, then flip the setting and adjust individuals one at a time.
+
+Conductor posts a per-student grade map in a single call, so you can just say
+what you mean: "group 1 gets 90, except one member gets 88."
+
+```bash
+# 1. Turn on per-member grading (leave it off and Canvas pools the grade)
+conductor assignments update -c is402 --id 12345 --individual-grading
+
+# 2. Pull the rosters you need to build the CSV
+conductor student-groups list -c is402
+conductor student-groups members --group 6789 -o csv
+
+# 3. Write grades.csv — user_id,grade[,comment] — then preview and commit
+conductor submissions bulk-grade -c is402 --assignment 12345 --file grades.csv
+conductor submissions bulk-grade -c is402 --assignment 12345 --file grades.csv --commit
+```
+
+Step 1 is not optional and not cosmetic. With pooled grading still on, Canvas
+applies each CSV row to every member of that student's group, so the
+exceptions vanish and everyone lands on whichever row was processed last — a
+CSV that reads correctly and grades incorrectly. `bulk-grade` pre-flights the
+assignment and refuses rather than letting that happen, in dry run as well as
+on `--commit`.
+
+The CSV is worth keeping: it re-runs after a regrade, and its optional
+`comment` column attaches per-student feedback in the same pass, which is
+usually most needed on exactly the students who got an exception.
 
 ## Troubleshooting
 
