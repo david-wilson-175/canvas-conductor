@@ -96,6 +96,24 @@ def create_assignment(
     grading_type: str = typer.Option(
         None, "--grading-type", help="points, percent, pass_fail, letter_grade, gpa_scale, not_graded"
     ),
+    group_category_id: int = typer.Option(
+        None,
+        "--group-category-id",
+        help=(
+            "Student group set id (see `student-groups categories`). Makes this a "
+            "group assignment: every group in the set is auto-assigned, one "
+            "submission per group."
+        ),
+    ),
+    individual_grading: bool = typer.Option(
+        None,
+        "--individual-grading/--group-grading",
+        help=(
+            "Group assignments only: grade each member separately, or pool one "
+            "grade across the whole group. Only meaningful with "
+            "--group-category-id."
+        ),
+    ),
     dry_run: bool = typer.Option(False, "--dry-run"),
     yes: bool = typer.Option(False, "-y", "--yes"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
@@ -116,6 +134,13 @@ def create_assignment(
                 "assignment_group_id": group_id,
                 "description": description,
                 "grading_type": grading_type,
+                "group_category_id": group_category_id,
+                # Tri-state like `update`, not `published or None` above. That
+                # idiom suits a lone `--published`, where False and "unset" mean
+                # the same thing. Here False is a real choice the user spelled
+                # out as --group-grading, so `or None` would silently drop it
+                # and make the flag inert. Send it.
+                "grade_group_students_individually": individual_grading,
             },
         )
         if dry_run:
@@ -140,6 +165,15 @@ def update_assignment(
     published: bool = typer.Option(None, "--published"),
     group_id: int = typer.Option(None, "--group-id"),
     description: str = typer.Option(None, "--description"),
+    group_category_id: int = typer.Option(
+        None,
+        "--group-category-id",
+        help=(
+            "Student group set id (see `student-groups categories`). Makes this a "
+            "group assignment: every group in the set is auto-assigned, one "
+            "submission per group."
+        ),
+    ),
     individual_grading: bool = typer.Option(
         None,
         "--individual-grading/--group-grading",
@@ -166,6 +200,7 @@ def update_assignment(
                 "published": published,
                 "assignment_group_id": group_id,
                 "description": description,
+                "group_category_id": group_category_id,
                 "grade_group_students_individually": individual_grading,
             },
         )
