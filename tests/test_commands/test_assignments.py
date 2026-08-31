@@ -202,3 +202,25 @@ def test_create_group_grading_sends_false(write_config, mock_responses, api):
     payload = _create_payload(mock_responses)
     assert payload["group_category_id"] == 20410
     assert payload["grade_group_students_individually"] is False
+
+
+def test_update_sets_submission_type(write_config, mock_responses, api):
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/7", json={"id": 7, "name": "Proj"})
+    result = runner.invoke(
+        app, ["assignments", "update", "--id", "7", "--type", "online_url"]
+    )
+    assert result.exit_code == 0, result.output
+    assert _update_payload(mock_responses)["submission_types"] == ["online_url"]
+
+
+def test_update_without_type_flag_leaves_submission_types_alone(
+    write_config, mock_responses, api
+):
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/7", json={"id": 7, "name": "Proj"})
+    result = runner.invoke(
+        app, ["assignments", "update", "--id", "7", "--name", "Renamed"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "submission_types" not in _update_payload(mock_responses)

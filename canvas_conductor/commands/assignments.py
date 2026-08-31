@@ -165,6 +165,12 @@ def update_assignment(
     published: bool = typer.Option(None, "--published"),
     group_id: int = typer.Option(None, "--group-id"),
     description: str = typer.Option(None, "--description"),
+    submission_type: str = typer.Option(
+        None,
+        "--type",
+        help="online_upload, online_text_entry, online_url, none, etc. "
+             "Replaces the existing submission type(s) entirely.",
+    ),
     group_category_id: int = typer.Option(
         None,
         "--group-category-id",
@@ -200,6 +206,7 @@ def update_assignment(
                 "published": published,
                 "assignment_group_id": group_id,
                 "description": description,
+                "submission_types": [submission_type] if submission_type else None,
                 "group_category_id": group_category_id,
                 "grade_group_students_individually": individual_grading,
             },
