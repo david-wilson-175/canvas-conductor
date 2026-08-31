@@ -171,8 +171,8 @@ def test_create_with_group_category_id(write_config, mock_responses, api):
 
 
 def test_create_without_individual_grading_omits_the_field(write_config, mock_responses, api):
-    """create's default is False, routed through `or None` — unlike update, a
-    plain `--group-category-id` with no grading flag shouldn't send False."""
+    """No grading flag means "don't care" — let Canvas apply its own default
+    rather than asserting one. Same tri-state contract as update."""
     _config(write_config)
     mock_responses.post(f"{api}/courses/99/assignments", json={"id": 9, "name": "Sprint"})
     result = runner.invoke(
@@ -182,3 +182,23 @@ def test_create_without_individual_grading_omits_the_field(write_config, mock_re
     payload = _create_payload(mock_responses)
     assert payload["group_category_id"] == 20410
     assert "grade_group_students_individually" not in payload
+
+
+def test_create_group_grading_sends_false(write_config, mock_responses, api):
+    """--group-grading is an explicit choice, not silence, so it has to reach
+    Canvas as False. Canvas happens to default this field to false on create,
+    which is what let the flag sit inert here without any test noticing.
+    """
+    _config(write_config)
+    mock_responses.post(f"{api}/courses/99/assignments", json={"id": 9, "name": "Sprint"})
+    result = runner.invoke(
+        app,
+        [
+            "assignments", "create", "--name", "Sprint",
+            "--group-category-id", "20410", "--group-grading",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = _create_payload(mock_responses)
+    assert payload["group_category_id"] == 20410
+    assert payload["grade_group_students_individually"] is False

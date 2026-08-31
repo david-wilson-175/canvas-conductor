@@ -106,7 +106,7 @@ def create_assignment(
         ),
     ),
     individual_grading: bool = typer.Option(
-        False,
+        None,
         "--individual-grading/--group-grading",
         help=(
             "Group assignments only: grade each member separately, or pool one "
@@ -135,7 +135,12 @@ def create_assignment(
                 "description": description,
                 "grading_type": grading_type,
                 "group_category_id": group_category_id,
-                "grade_group_students_individually": individual_grading or None,
+                # Tri-state like `update`, not `published or None` above. That
+                # idiom suits a lone `--published`, where False and "unset" mean
+                # the same thing. Here False is a real choice the user spelled
+                # out as --group-grading, so `or None` would silently drop it
+                # and make the flag inert. Send it.
+                "grade_group_students_individually": individual_grading,
             },
         )
         if dry_run:

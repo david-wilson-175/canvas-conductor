@@ -278,12 +278,22 @@ conductor assignments update -c is402 --id 12345 --due "2026-07-01T23:59:00Z"
 conductor assignments delete -c is402 --id 12345
 conductor assignments bulk-dates -c is402 --shift 7d  # Shift all due dates by 7 days
 
+# Attach an assignment to a student group set, making it a group assignment
+conductor student-groups categories -c is402        # Find the group set id
+conductor assignments update -c is402 --id 12345 --group-category-id 20410
+conductor assignments create -c is402 --name "Sprint 1" --group-category-id 20410
+
 # Group assignments: one grade for the whole group, or a grade per member
 conductor assignments update -c is402 --id 12345 --individual-grading
 conductor assignments update -c is402 --id 12345 --group-grading
 ```
 
-Omit both flags and the setting is left alone — see
+`--group-category-id` is what makes an assignment a group assignment in the
+first place: every group in the set is auto-assigned and Canvas takes one
+submission per group. The grading flags then decide how that submission is
+scored, so the two compose in a single call.
+
+Omit both grading flags and the setting is left alone — see
 [Grade a group assignment with per-student exceptions](#grade-a-group-assignment-with-per-student-exceptions).
 
 ### Files
@@ -573,6 +583,11 @@ what you mean: "group 1 gets 90, except one member gets 88."
 ```bash
 # 1. Turn on per-member grading (leave it off and Canvas pools the grade)
 conductor assignments update -c is402 --id 12345 --individual-grading
+
+# If the assignment isn't a group assignment yet, attach the group set and set
+# the grading mode in one call instead:
+conductor assignments update -c is402 --id 12345 \
+    --group-category-id 20410 --individual-grading
 
 # 2. Pull the rosters you need to build the CSV
 conductor student-groups list -c is402
