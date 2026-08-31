@@ -140,6 +140,14 @@ def update_assignment(
     published: bool = typer.Option(None, "--published"),
     group_id: int = typer.Option(None, "--group-id"),
     description: str = typer.Option(None, "--description"),
+    individual_grading: bool = typer.Option(
+        None,
+        "--individual-grading/--group-grading",
+        help=(
+            "Group assignments only: grade each member separately, or pool one "
+            "grade across the whole group. Omit to leave the setting alone."
+        ),
+    ),
     dry_run: bool = typer.Option(False, "--dry-run"),
     yes: bool = typer.Option(False, "-y", "--yes"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
@@ -158,6 +166,7 @@ def update_assignment(
                 "published": published,
                 "assignment_group_id": group_id,
                 "description": description,
+                "grade_group_students_individually": individual_grading,
             },
         )
         if not payload:

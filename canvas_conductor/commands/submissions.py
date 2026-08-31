@@ -72,11 +72,41 @@ def grade_submission(
         raise handle_canvas_error(exc)
 
 
+def _check_group_grading(client, cid: int, assignment_id: int, allow: bool) -> None:
+    """Refuse to bulk-grade a group assignment that pools one grade per group.
+
+    On such an assignment Canvas applies every row to the whole group, so
+    per-student grades in the CSV are silently overwritten by whichever row
+    for that group lands last. The CSV looks right; the grades are wrong.
+    """
+    assignment = client.get(f"/courses/{cid}/assignments/{assignment_id}")
+    is_group = assignment.get("group_category_id") is not None
+    individually = assignment.get("grade_group_students_individually")
+    if not is_group or individually or allow:
+        return
+    name = assignment.get("name", assignment_id)
+    emit(
+        f"ERROR: '{name}' is a group assignment that pools one grade per group.\n"
+        "Canvas would apply each CSV row to every member of that student's "
+        "group, so per-student grades would be silently overwritten.\n\n"
+        "Turn on individual grading first:\n"
+        f"  conductor assignments update -c <course> --id {assignment_id} "
+        "--individual-grading\n\n"
+        "Or pass --allow-group-propagation if one grade per group is what you want."
+    )
+    raise typer.Exit(code=2)
+
+
 @app.command("bulk-grade")
 def bulk_grade(
     assignment_id: int = typer.Option(..., "--assignment"),
     file: str = typer.Option(..., "--file", help="CSV with columns: user_id,grade[,comment]"),
     course: str = typer.Option(None, "-c", "--course"),
+    allow_group_propagation: bool = typer.Option(
+        False,
+        "--allow-group-propagation",
+        help="Permit bulk-grading a group assignment that pools one grade per group.",
+    ),
     dry_run: bool = typer.Option(True, "--dry-run/--commit"),
     yes: bool = typer.Option(False, "-y", "--yes"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
@@ -116,6 +146,11 @@ def bulk_grade(
         grade_data = {"grade_data": per_student}
         url = f"/courses/{cid}/assignments/{assignment_id}/submissions/update_grades"
 
+        # Runs in dry-run too: catching the group-propagation trap is only
+        # useful if it fires before you commit.
+        client = get_client(verbose=verbose)
+        _check_group_grading(client, cid, assignment_id, allow_group_propagation)
+
         if dry_run:
             emit(f"DRY-RUN: would post {n_students} grades to {url}")
             for uid, entry in list(per_student.items())[:10]:
@@ -130,7 +165,6 @@ def bulk_grade(
             emit("Aborted.")
             raise typer.Exit(code=1)
 
-        client = get_client(verbose=verbose)
         result = client.post(url, data=grade_data)
         emit("Submitted bulk grade job. Canvas processes this asynchronously.")
         if isinstance(result, dict):
