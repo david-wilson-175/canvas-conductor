@@ -114,3 +114,71 @@ def test_bulk_dates_dry_run(write_config, mock_responses, api):
     assert "DRY-RUN" in result.output
     assert "HW1" in result.output
     assert "2026-07-08T23:59:00Z" in result.output
+
+
+# --- group_category_id (Laura's addition on top of Dave's individual-grading toggle) ---
+
+
+def _create_payload(mock_responses) -> dict:
+    """Return the assignment body of the last POST the CLI made."""
+    body = json.loads(mock_responses.calls[-1].request.body)
+    return body["assignment"]
+
+
+def test_update_sets_group_category_id(write_config, mock_responses, api):
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/7", json={"id": 7, "name": "Proj"})
+    result = runner.invoke(
+        app,
+        ["assignments", "update", "--id", "7", "--group-category-id", "20410"],
+    )
+    assert result.exit_code == 0, result.output
+    assert _update_payload(mock_responses)["group_category_id"] == 20410
+
+
+def test_update_group_category_id_and_individual_grading_together(
+    write_config, mock_responses, api
+):
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/7", json={"id": 7, "name": "Proj"})
+    result = runner.invoke(
+        app,
+        [
+            "assignments", "update", "--id", "7",
+            "--group-category-id", "20410", "--individual-grading",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = _update_payload(mock_responses)
+    assert payload["group_category_id"] == 20410
+    assert payload["grade_group_students_individually"] is True
+
+
+def test_create_with_group_category_id(write_config, mock_responses, api):
+    _config(write_config)
+    mock_responses.post(f"{api}/courses/99/assignments", json={"id": 9, "name": "Sprint"})
+    result = runner.invoke(
+        app,
+        [
+            "assignments", "create", "--name", "Sprint",
+            "--group-category-id", "20410", "--individual-grading",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = _create_payload(mock_responses)
+    assert payload["group_category_id"] == 20410
+    assert payload["grade_group_students_individually"] is True
+
+
+def test_create_without_individual_grading_omits_the_field(write_config, mock_responses, api):
+    """create's default is False, routed through `or None` — unlike update, a
+    plain `--group-category-id` with no grading flag shouldn't send False."""
+    _config(write_config)
+    mock_responses.post(f"{api}/courses/99/assignments", json={"id": 9, "name": "Sprint"})
+    result = runner.invoke(
+        app, ["assignments", "create", "--name", "Sprint", "--group-category-id", "20410"]
+    )
+    assert result.exit_code == 0, result.output
+    payload = _create_payload(mock_responses)
+    assert payload["group_category_id"] == 20410
+    assert "grade_group_students_individually" not in payload
