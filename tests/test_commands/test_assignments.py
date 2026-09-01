@@ -224,3 +224,27 @@ def test_update_without_type_flag_leaves_submission_types_alone(
     )
     assert result.exit_code == 0, result.output
     assert "submission_types" not in _update_payload(mock_responses)
+
+
+def test_update_clears_group_category_id(write_config, mock_responses, api):
+    _config(write_config)
+    mock_responses.put(f"{api}/courses/99/assignments/7", json={"id": 7, "name": "Proj"})
+    result = runner.invoke(
+        app, ["assignments", "update", "--id", "7", "--clear-group-category-id"]
+    )
+    assert result.exit_code == 0, result.output
+    assert _update_payload(mock_responses)["group_category_id"] == ""
+
+
+def test_update_group_category_id_and_clear_together_errors(write_config, mock_responses, api):
+    _config(write_config)
+    result = runner.invoke(
+        app,
+        [
+            "assignments", "update", "--id", "7",
+            "--group-category-id", "20410", "--clear-group-category-id",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "not both" in result.output
+    assert len(mock_responses.calls) == 0

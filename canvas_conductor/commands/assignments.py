@@ -7,6 +7,7 @@ import typer
 
 from ..client import get_client
 from ..config import get_course_id
+from ..utils.dates import CLEAR
 from ..utils.dates import parse_shift as _parse_shift
 from ..utils.dates import shift_iso as _shift_iso
 from ..utils.output import format_output
@@ -153,6 +154,25 @@ def create_assignment(
         raise handle_canvas_error(exc)
 
 
+def _resolve_group_category(
+    group_category_id: int | None, clear_group_category: bool
+) -> int | str | None:
+    """Turn `--group-category-id` / `--clear-group-category-id` into a payload
+    value (None = leave alone).
+
+    Converting a group assignment back to an individual one isn't possible by
+    just omitting `--group-category-id` -- Canvas leaves the existing value in
+    place unless you explicitly clear it.
+    """
+    if group_category_id and clear_group_category:
+        raise typer.BadParameter(
+            "Pass either --group-category-id or --clear-group-category-id, not both."
+        )
+    if clear_group_category:
+        return CLEAR
+    return group_category_id
+
+
 @app.command("update")
 def update_assignment(
     assignment_id: int = typer.Option(..., "--id"),
@@ -178,6 +198,15 @@ def update_assignment(
             "Student group set id (see `student-groups categories`). Makes this a "
             "group assignment: every group in the set is auto-assigned, one "
             "submission per group."
+        ),
+    ),
+    clear_group_category: bool = typer.Option(
+        False,
+        "--clear-group-category-id",
+        help=(
+            "Convert this assignment back to an individual assignment by "
+            "removing its group_category_id. Cannot be combined with "
+            "--group-category-id."
         ),
     ),
     individual_grading: bool = typer.Option(
@@ -207,7 +236,9 @@ def update_assignment(
                 "assignment_group_id": group_id,
                 "description": description,
                 "submission_types": [submission_type] if submission_type else None,
-                "group_category_id": group_category_id,
+                "group_category_id": _resolve_group_category(
+                    group_category_id, clear_group_category
+                ),
                 "grade_group_students_individually": individual_grading,
             },
         )
