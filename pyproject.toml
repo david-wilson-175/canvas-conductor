@@ -19,6 +19,11 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "rich>=13.0.0",
     "tomli>=2.0.0; python_version < '3.11'",
+    # zoneinfo (used throughout utils/dates.py for --tz) reads the IANA tz
+    # database from the OS on Linux/macOS, but Windows ships no such
+    # database -- without this, ANY named zone (e.g. America/Denver) fails
+    # with ZoneInfoNotFoundError on Windows, even though the name is valid.
+    "tzdata>=2024.1; sys_platform == 'win32'",
     # Used by the playbook extension (markdown rendering + HTML post-processing).
     "markdown>=3.5",
     "beautifulsoup4>=4.12.0",

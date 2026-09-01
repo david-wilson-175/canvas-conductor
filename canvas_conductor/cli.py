@@ -19,6 +19,7 @@ from .commands import (
     files,
     groups,
     modules,
+    overrides,
     pages,
     requirements,
     sections,
@@ -71,6 +72,7 @@ app.add_typer(enrollments.app, name="enrollments")
 app.add_typer(sections.app, name="sections")
 app.add_typer(tabs.app, name="tabs")
 app.add_typer(discussions.app, name="discussions")
+app.add_typer(overrides.app, name="overrides")
 app.add_typer(groups.app, name="groups")
 app.add_typer(config_cmds.app, name="config")
 # Promoted from extensions/ (2026-08-26): both are generic Canvas capabilities
