@@ -59,6 +59,7 @@ canvas-conductor/
 │   ├── models.py           # Pydantic response models (used sparingly)
 │   ├── utils/output.py     # format_output (table/json/csv) and friends
 │   ├── utils/dates.py      # Bare-date → Canvas UTC conversion, tz resolution, shifts
+│   ├── utils/html_text.py  # Canvas HTML body → plain text (word counts, reading)
 │   ├── commands/           # One module per command group
 │   │   ├── _common.py      # emit, handle_canvas_error, confirm_or_abort, …
 │   │   ├── pages.py        # ← Best reference for the standard command pattern
@@ -302,6 +303,7 @@ loading and respects the walk-up-to-find-`.env` convention.
 | `confirm_or_abort(message, yes, dry_run)` | Standard destructive-op gate. Call before any delete/overwrite. Honors `--dry-run` and `-y/--yes`. |
 | `parse_kv_list("k=v,k2=v2")` | Parse a comma-separated key=value flag value. |
 | `prefix_keys("wiki_page", {"title": "Hi"})` | Nests the payload under one resource key — `{"wiki_page": {"title": "Hi"}}` — and drops `None` values. Returns `{}` if everything was `None`, so you can short-circuit. Use it for every write body; see the bracket-key warning above. |
+| `preview_write(method, path, payload)` | The standard `--dry-run` body: prints the target and the literal JSON payload, and sends nothing. |
 | `guard_readonly(course_key, force, dry_run)` | Refuses a write against a course marked `readonly = true` in config.toml (exit code 9). `--force` overrides it loudly; `--dry-run` passes through with a note. Call it right after `get_course_id` in any command that writes. |
 
 Exit codes, so scripts can branch on them:
@@ -329,6 +331,13 @@ Exit codes, so scripts can branch on them:
 | `local_day(value, tz=None)` | Canvas UTC timestamp → `YYYY-MM-DD HH:MM` local, for display. Round-trips back through `to_canvas_datetime`. |
 | `parse_shift("7d")` / `shift_iso(value, delta)` | Duration parsing and None-safe timestamp shifting, shared by `assignments bulk-dates` and `pages bulk-todo`. |
 | `CLEAR` | The empty-string sentinel that clears a Canvas date field. `None` means "leave alone" — `prefix_keys` drops it. |
+
+`from canvas_conductor.utils.html_text import html_to_text, word_count` —
+any time you need the prose out of a Canvas HTML body (discussion entries,
+page bodies). It drops `<script>`/`<style>`/`<link>` content rather than
+just stripping angle brackets, which matters because institutions inject a
+stylesheet and a script into every discussion entry — a naive strip leaves
+those URLs in the text and inflates every word count.
 
 `from canvas_conductor.utils.output import format_output, format_kv`:
 
@@ -456,6 +465,46 @@ These bit us during real work. Save yourself the rediscovery:
   includes the Student View test student, who has no real enrollment —
   drive from the enrollment list and left-join, or that phantom lands in
   your denominator.
+
+- **A discussion topic's `entries` endpoint is not the thread.**
+  `GET /courses/:id/discussion_topics/:tid/entries` returns top-level posts
+  only — 4 of 8 on a verified thread. The whole thread comes from
+  `GET …/:tid/view`, which nests `replies` recursively (deeper than two
+  levels on a `threaded` topic) and carries `participants`,
+  `unread_entries` and `new_entries` alongside it. Entries in the view have
+  **only `user_id`**, never a name, so the participant join is mandatory.
+
+- **`discussion_type` does not constrain the API.** A `side_comment` topic
+  accepts a reply to a reply exactly like a `threaded` one, and the view
+  reports the resulting depth (verified 2026-09-04). The type governs what
+  Canvas's own UI offers, so never assume a two-level ceiling when walking
+  a thread.
+
+- **That view is a materialized cache, and it lags.** A brand-new entry
+  takes 1–2 seconds to appear (verified 2026-09-04), and on a topic whose
+  view has never been built, the first call returns *everything* empty —
+  `view`, `participants` and `new_entries` all `[]` — even though the
+  entries exist. A read-back straight after a POST will therefore report a
+  perfectly good write as missing unless it retries; `discussions entries`
+  retries and then falls back to the uncached `entries`/`replies`
+  endpoints, which reflect a write immediately.
+
+- **A deleted entry keeps its place and loses its author.** It comes back
+  as `{id, created_at, updated_at, parent_id, editor_id, deleted: true}` —
+  no `user_id`, no `message` — while still nesting its replies. Anything
+  walking the tree has to handle a node with no author rather than assume
+  `user_id` is present.
+
+- **Institutions inject markup into every entry body.** At BYU an entry
+  posted as `<p>Hi</p>` reads back wrapped in a `<link rel="stylesheet">`
+  and a `<script src=…>`. Use `utils.html_text.html_to_text`, not a regex.
+
+- **Reading a discussion never marks it read.** `GET …/view` and
+  `GET …/entries` both leave `unread_entries` untouched (verified by
+  forcing an entry unread with `DELETE …/entries/:id/read` and re-reading).
+  Read state changes only through `PUT …/entries/:id/read` and
+  `PUT …/read_all`, both of which answer `204` with no body — confirm them
+  by re-reading `unread_entries`, not by trusting the status code.
 
 - **The token is teacher-level.** Admin endpoints (account-level reads,
   user provisioning, SIS) will 403. If you encounter a 403, you've hit one

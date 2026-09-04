@@ -415,7 +415,7 @@ Write commands then refuse to touch it (exit code 9). Reads are unaffected,
 `--dry-run` still works and says what would have been refused, and `--force`
 overrides the block with a warning. This flag previously existed as a note
 for humans that the CLI ignored entirely; it is now enforced for the
-`enrollments` write commands.
+`enrollments` and `discussions entries` write commands.
 
 ### Sections
 
@@ -451,6 +451,113 @@ conductor discussions delete -c is402 --id 12345
 conductor discussions create -c is402 --title "Reading response" --todo 2026-09-15 --published
 conductor discussions update -c is402 --id 12345 --clear-todo
 ```
+
+#### Discussion entries
+
+`discussions entries` works one level down, on the individual posts and
+replies inside a topic. It is a set of primitives, not a workflow: it reads
+the thread and writes single posts, and everything else — deciding what is
+new, drafting replies, judging who has been answered — belongs in whatever
+script you build on top of the JSON.
+
+```bash
+# The whole thread, replies and all, flattened with names and roles resolved
+conductor discussions entries list -c is402 --topic 706686
+
+# Read it as a thread instead of a table; `*` marks entries unread by you
+conductor discussions entries list -c is402 --topic 706686 -o tree
+
+# One post, with its body
+conductor discussions entries show -c is402 --topic 706686 --entry 7038173
+
+# Post, and reply to a post. --message-file is read verbatim as UTF-8.
+conductor discussions entries create -c is402 --topic 706686 --message "<p>Welcome.</p>"
+conductor discussions entries reply -c is402 --topic 706686 --entry 7038173 \
+    --message-file ~/drafts/reply-to-ada.html
+
+# Read state is never changed implicitly; this is the only thing that changes it
+conductor discussions entries mark-read -c is402 --topic 706686 --entry 7038173
+conductor discussions entries mark-read -c is402 --topic 706686 --all
+```
+
+`list` returns the *complete* thread in one call. Canvas's `entries`
+endpoint returns top-level posts only — on a verified thread it returned 4
+of 8 — so the CLI reads the topic's threaded view and flattens it, which
+also means nesting deeper than two levels comes back intact.
+
+Filters are stateless and compose. Nothing is remembered between runs, so
+"what's new since last time" is `--since` plus a timestamp your script kept:
+
+| Flag | Filters on |
+|---|---|
+| `--since` / `--until` | `created_at`. A bare date covers the whole local day (`--since` starts at 00:00, `--until` ends at 23:59); a full ISO datetime is used as given. |
+| `--unread` | Entries unread **by you** — the user the token belongs to. |
+| `--user` | A numeric user id, or a case-insensitive substring of the display name. |
+| `--role` | The author's enrollment: `teacher`, `ta`, `student`, `designer`, `observer`, or a full Canvas type. |
+| `--top-level-only` / `--replies-only` | Whether the entry has a parent. |
+| `--min-words` / `--max-words` | Words in the plain-text rendering of the body. |
+| `--no-deleted` | Drops deleted entries, which are otherwise included and flagged. |
+
+Filtering is per entry, not per subtree: excluding a parent does not hide
+its replies, and `depth` and `parent_id` still describe the entry's real
+place in the thread so a caller can rebuild the structure.
+
+##### The JSON contract
+
+`-o json` is the point of this command group. Every entry carries:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | int | Canvas entry id. |
+| `parent_id` | int \| null | null for a top-level post. |
+| `topic_id` | int | The topic the entry belongs to. |
+| `user_id` | int \| null | null on a deleted entry — Canvas drops the author. |
+| `display_name` | str \| null | Joined from the thread's participant list. |
+| `role` | str \| null | Canvas enrollment type, highest privilege first (`TeacherEnrollment`, `TaEnrollment`, `DesignerEnrollment`, `ObserverEnrollment`, `StudentEnrollment`, `StudentViewEnrollment`). null if the author holds no enrollment, or `--no-roles` was passed. |
+| `roles` | list[str] \| null | Every enrollment type the author holds. `[]` when they hold none; null when `--no-roles` skipped the join. |
+| `created_at` / `updated_at` | str \| null | Canvas UTC ISO-8601. |
+| `message_html` | str \| null | Exactly as Canvas returns it, including any wrapper your institution injects. |
+| `message_text` | str | The same body rendered to plain text. |
+| `word_count` | int | Words in `message_text`. |
+| `depth` | int \| null | 0 for a top-level post, +1 per level of nesting. |
+| `deleted` | bool | True for a tombstone: no author, no body, replies intact. |
+| `unread` | bool | Unread by you. |
+| `rating_count` / `rating_sum` | int \| null | Canvas "like" ratings, when the topic enables them. |
+| `editor_id` | int \| null | Last user to edit or delete the entry. |
+| `attachments` | list[dict] | Files attached to the entry; `[]` when none. |
+
+`parent_id` plus the author identity on every entry is what lets a caller
+reconstruct who replied to whom without the CLI having an opinion about it.
+Table and CSV output carry the metadata columns only — post bodies are
+student work, and a summary listing is not a request to print them. Use
+`-o tree` to read the thread or `-o json` for everything.
+
+The `role` join costs one extra request (the course's enrollment list).
+`--no-roles` skips it; `role` and `roles` then come back null.
+
+##### Read state
+
+Reading never writes. `entries list` and `entries show` leave Canvas's
+unread state exactly as they found it — verified by forcing an entry unread
+and re-reading it several ways — so the badges you rely on in the web UI and
+on mobile survive any amount of scripted reading. `entries mark-read` is the
+only command that clears them, it only affects your own read state, and it
+confirms the change by re-reading the topic's unread list rather than
+trusting Canvas's `204`.
+
+##### Writes
+
+`create` and `reply` both post and then read the entry back before
+reporting success, exiting 10 if it cannot be found. This is not paranoia:
+Canvas's threaded view is a cache that lags a write by a second or two, so
+the read-back retries, and falls back to the uncached entry listing.
+
+`--message-file` exists because replies are prose and shell quoting is
+hostile to prose. The file is read as UTF-8 and sent byte-for-byte — no
+markdown conversion, no reflowing, no template expansion. Canvas renders a
+body as HTML, so plain text with blank lines arrives as one paragraph; pass
+HTML if you want structure. `--dry-run` prints the exact payload and target
+and sends nothing.
 
 ### Assignment Groups
 
