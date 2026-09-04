@@ -96,12 +96,15 @@ def get_courses() -> dict[str, dict[str, Any]]:
     return cfg.get("courses", {}) or {}
 
 
-def get_course_id(course_key: str | None) -> int:
-    """Resolve a course alias to a Canvas course ID.
+def get_course_entry(course_key: str | None) -> tuple[str, dict[str, Any]]:
+    """Resolve a course alias to its `(alias, config-block)` pair.
 
     - If `course_key` is given, look it up in `[courses.*]`.
     - If `course_key` is None and exactly one course is configured, use it.
     - Otherwise raise `ConfigError` with a helpful message.
+
+    Returning the whole block (not just the id) lets callers read
+    per-course policy such as `readonly = true`.
     """
     courses = get_courses()
     if not courses:
@@ -113,7 +116,7 @@ def get_course_id(course_key: str | None) -> int:
     if course_key is None:
         if len(courses) == 1:
             only_key = next(iter(courses))
-            return int(courses[only_key]["id"])
+            return only_key, courses[only_key]
         keys = ", ".join(sorted(courses))
         raise ConfigError(
             "Multiple courses configured — pass --course/-c with one of: "
@@ -126,10 +129,27 @@ def get_course_id(course_key: str | None) -> int:
             f"Course '{course_key}' not found in config.toml. Available: {keys}"
         )
 
-    entry = courses[course_key]
+    return course_key, courses[course_key]
+
+
+def get_course_id(course_key: str | None) -> int:
+    """Resolve a course alias to a Canvas course ID."""
+    alias, entry = get_course_entry(course_key)
     if "id" not in entry:
-        raise ConfigError(f"Course '{course_key}' is missing the required 'id' field.")
+        raise ConfigError(f"Course '{alias}' is missing the required 'id' field.")
     return int(entry["id"])
+
+
+def is_course_readonly(course_key: str | None) -> bool:
+    """Whether `[courses.<alias>] readonly = true` is set.
+
+    Until 2026-09-04 this flag was documentation only — the CLI parsed the
+    config but never consulted it, so a `readonly` course accepted writes
+    exactly like any other. Write commands now gate on it; see
+    `commands/_common.guard_readonly`.
+    """
+    _, entry = get_course_entry(course_key)
+    return bool(entry.get("readonly", False))
 
 
 def require_credentials() -> tuple[str, str]:
