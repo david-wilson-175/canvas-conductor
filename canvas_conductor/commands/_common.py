@@ -6,6 +6,7 @@ each `commands/<group>.py` file; helpers here only handle plumbing
 """
 from __future__ import annotations
 
+import json
 import sys
 from typing import Any
 
@@ -125,6 +126,19 @@ def guard_readonly(course_key: str | None, force: bool, dry_run: bool = False) -
         "flag from that course's config block."
     )
     raise typer.Exit(code=9)
+
+
+def preview_write(method: str, path: str, payload: Any | None = None) -> None:
+    """Print exactly what a write would send, and send nothing.
+
+    The standard body of a `--dry-run` branch: the target and the literal
+    payload, so the user can compare it against Canvas's docs before
+    letting it go out.
+    """
+    emit(f"DRY-RUN: {method} {path}")
+    if payload is not None:
+        emit("DRY-RUN: payload=" + json.dumps(payload, indent=2, sort_keys=True))
+    emit("DRY-RUN: no request was made.")
 
 
 def parse_kv_list(value: str | None) -> dict[str, str]:
