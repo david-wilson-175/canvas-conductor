@@ -233,7 +233,7 @@ that should be part of the public repo, add a `!filename.py` line to
 | `client.get_all(path, params=None)` | GET with automatic Link-header pagination. Returns a list. Use this any time the endpoint is paginated (most listings are). |
 | `client.post(path, data=None, files=None, json=None)` | POST. `data=` is JSON-encoded as the body unless `files=` is set (multipart). Use `data=` for normal Canvas requests. |
 | `client.put(path, data=None)` | PUT. `data=` is JSON-encoded. |
-| `client.delete(path)` | DELETE. Returns `True` on success. |
+| `client.delete(path, params=None, parse=False)` | DELETE. Returns `True` on success, or the parsed body when `parse=True`. `params` goes on the query string — Canvas's destructive endpoints take their modifier there, notably `?task=conclude` on `DELETE /courses/:id/enrollments/:id`. |
 | `client.upload_file(course_id, local_path, folder_path=None, content_type=None, on_duplicate="rename")` | Implements Canvas's two-step upload. Returns the final file dict from the second-leg response (with `id`, `display_name`, `size`, `url`, etc.). |
 
 Path conventions:
@@ -242,10 +242,28 @@ Path conventions:
 - For full URLs (e.g. follow-up requests to S3-style upload endpoints), the
   client passes them through unchanged.
 
-Payload shapes: Canvas accepts both nested JSON and flat bracket-style keys
-(`{"wiki_page[title]": "Hi"}`). The codebase uses flat bracket style by
-convention. There's a helper for it (`prefix_keys`, below) but inlining the
-keys is also common — match the surrounding file's style.
+Payload shapes: **always nested JSON, never bracket-style keys.**
+
+```python
+{"enrollment": {"user_id": "sis_login_id:milla23"}}   # correct
+{"enrollment[user_id]": "sis_login_id:milla23"}       # silently does nothing
+```
+
+`post`/`put`/`delete` send `json=`, not form-encoded `data=` — the `data=`
+parameter name is a historical wart, but the body goes out as JSON. A
+Rails-style bracket key therefore arrives at Canvas as a meaningless
+top-level JSON field. Canvas does not reject it: it returns **200 OK and
+writes nothing**. This has cost real debugging time twice (a page write and
+an enrollment write), and the only reliable way to notice is a read-back.
+
+Build every payload with `prefix_keys` (below), which nests. Do not inline
+bracket keys, and do not copy them out of Canvas's own documentation —
+those examples describe the form-encoded API, which is not what this client
+speaks.
+
+Bracket keys in `params=` are a different thing and are correct: query
+strings really do use `include[]=items`, `state[]=active`. The rule is
+about request *bodies* only.
 
 Errors raise typed exceptions:
 - `CanvasAuthError` (401), `CanvasPermissionError` (403),
@@ -263,6 +281,8 @@ Errors raise typed exceptions:
 | Function | Use it for |
 |---|---|
 | `get_course_id(course_key: str \| None) -> int` | The only correct way to resolve `--course`. Auto-uses the single configured course if `course_key` is None and exactly one is defined. Raises `ConfigError` with a helpful message otherwise. |
+| `get_course_entry(course_key) -> tuple[str, dict]` | Same resolution, but returns `(alias, whole config block)` so you can read per-course policy rather than just the id. |
+| `is_course_readonly(course_key) -> bool` | Whether the course sets `readonly = true`. Prefer `guard_readonly` in commands; this is the raw check. |
 | `get_config() -> dict` | Whole parsed `config.toml` (lru-cached). Use it to read project-specific sections, e.g. `[courses.<alias>.playbook]`. |
 | `find_config_file() -> Path \| None` | Walks upward from cwd to find `config.toml`. Useful for resolving paths that are stored in TOML relative to the config file's location. |
 | `require_credentials() -> tuple[str, str]` | Returns `(base_url, token)` or raises `ConfigError`. Usually called for you by `get_client()`; only call directly if you need raw credentials. |
@@ -281,7 +301,24 @@ loading and respects the walk-up-to-find-`.env` convention.
 | `handle_canvas_error(exc)` | Maps an exception to a `typer.Exit(code=N)` with a formatted error to stderr. Pattern: `raise handle_canvas_error(exc)` from inside an `except`. |
 | `confirm_or_abort(message, yes, dry_run)` | Standard destructive-op gate. Call before any delete/overwrite. Honors `--dry-run` and `-y/--yes`. |
 | `parse_kv_list("k=v,k2=v2")` | Parse a comma-separated key=value flag value. |
-| `prefix_keys("wiki_page", {"title": "Hi"})` | Wraps each key in `wiki_page[…]` form for Canvas. Returns a dict you can pass to `client.post(data=…)`. |
+| `prefix_keys("wiki_page", {"title": "Hi"})` | Nests the payload under one resource key — `{"wiki_page": {"title": "Hi"}}` — and drops `None` values. Returns `{}` if everything was `None`, so you can short-circuit. Use it for every write body; see the bracket-key warning above. |
+| `guard_readonly(course_key, force, dry_run)` | Refuses a write against a course marked `readonly = true` in config.toml (exit code 9). `--force` overrides it loudly; `--dry-run` passes through with a note. Call it right after `get_course_id` in any command that writes. |
+
+Exit codes, so scripts can branch on them:
+
+| Code | Meaning |
+|---|---|
+| 0 | Success (including a completed `--dry-run`). |
+| 1 | User declined a confirmation prompt. |
+| 2 | `ConfigError` — bad or missing `.env` / `config.toml`. |
+| 3 | 401 auth failure; the token is expired or wrong. |
+| 4 | 403 permission denied. |
+| 5 | 404 not found. |
+| 6 | 422 Canvas rejected the payload. |
+| 7 | 429 rate limited after retries. |
+| 8 | Any other `CanvasError`. |
+| 9 | Blocked by `readonly = true`; pass `--force` to override. |
+| 10 | **Read-back verification failed** — Canvas reported success but the record isn't there, or doesn't match what was requested. Treat this as "the write may not have happened", not as a cosmetic warning. |
 
 `from canvas_conductor.utils.dates import …` — anything touching a date:
 
@@ -423,6 +460,41 @@ These bit us during real work. Save yourself the rediscovery:
 - **The token is teacher-level.** Admin endpoints (account-level reads,
   user provisioning, SIS) will 403. If you encounter a 403, you've hit one
   of these — don't burn cycles trying to make it work.
+
+- **You cannot search for a user by name.** `GET /accounts/:id/users?
+  search_term=…` is 403 for a teacher token at every account level,
+  including the root account. So no CLI flow may depend on turning a
+  person's name into a user id. What *does* work on the course-scoped
+  enrollment endpoint with plain teacher permissions is Canvas's reference
+  syntax: `"user_id": "sis_login_id:milla23"` (also `sis_user_id:` and bare
+  numeric ids). Pass those through untouched rather than resolving them.
+
+- **`POST /courses/:id/enrollments` can return `user: None`** on a fully
+  successful create — the enrollment is real, the embedded user object just
+  isn't populated. Never confirm who you enrolled from the POST response;
+  re-list the course's enrollments and match on the returned enrollment id.
+
+- **The same POST is idempotent.** Re-creating an identical
+  (user, type, section, role) enrollment returns the *existing* enrollment
+  id rather than making a duplicate (verified 2026-09-04). This makes
+  `enrollments add` and `enrollments update` safely re-runnable, and it
+  means a read-back can legitimately surface a record you didn't just make.
+
+- **`enrollments/:id/reactivate` is a PUT, not a POST.** POSTing it does not
+  405 — there is no such route, so Canvas answers 404 with an HTML error
+  page, which reads like "no such enrollment" and sends you hunting for the
+  wrong problem. (This is also why `_extract_message` now detects HTML
+  bodies instead of printing 200 characters of `<!DOCTYPE html>`.)
+
+- **`DELETE …/enrollments/:id` tasks are not equally permissioned.**
+  `task=conclude` succeeds for a teacher token; `task=delete`,
+  `deactivate` and `inactivate` all 403 on *your own* enrollment even when
+  `manage_students`, `remove_student_from_course` and
+  `remove_ta_from_course` are all true, because Canvas additionally
+  requires account-level `manage_admin_users` to act on yourself. Verified
+  2026-09-04 against the sandbox. `conclude` is not subject to that check.
+  Also note the tasks differ enormously in effect: `delete` destroys the
+  enrollment and its submissions, `conclude` preserves both.
 
 ## Conventions to follow / things to avoid
 
