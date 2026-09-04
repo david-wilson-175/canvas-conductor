@@ -20,6 +20,7 @@ from .commands import (
     groups,
     modules,
     pages,
+    progress,
     requirements,
     sections,
     student_groups,
@@ -72,6 +73,7 @@ app.add_typer(sections.app, name="sections")
 app.add_typer(tabs.app, name="tabs")
 app.add_typer(discussions.app, name="discussions")
 app.add_typer(groups.app, name="groups")
+app.add_typer(progress.app, name="progress")
 app.add_typer(config_cmds.app, name="config")
 # Promoted from extensions/ (2026-08-26): both are generic Canvas capabilities
 # rather than project-specific workflows, so they belong in the core surface.
