@@ -374,6 +374,52 @@ conductor groups update -c is402 --id 12345 --weight 50
 conductor groups delete -c is402 --id 12345
 ```
 
+### Progress
+
+Canvas has a per-student progress view (Modules > Student Progress) but no
+aggregate one — there's no built-in way to ask "how far has the class as a
+whole gotten?". This group answers both questions.
+
+```bash
+conductor progress course -c is402              # The aggregate view
+conductor progress student -c is402 --user "Jane Doe"
+conductor progress export -c is402 -o csv > progress.csv
+conductor progress export -c is402 --behind-only  # Who needs a nudge
+```
+
+`--user` takes a Canvas user id, SIS id, login, or part of a name.
+
+**Where the numbers come from.** Canvas's native progress data only exists
+when module items carry *completion requirements* (see `conductor
+requirements`). Without them, Canvas reports every module as `completed` for
+every student — including students who have never logged in — so
+`--source native` refuses to run rather than report a bogus 100%. The default
+`--source submissions` derives progress from graded work instead: any module
+item backed by an assignment, quiz, or graded discussion is trackable, and a
+student has done it once they've submitted, been graded, or been excused.
+Every command prints which source it used.
+
+**Vocabulary**, all reported per student and averaged across the course:
+
+| Term | Meaning |
+|---|---|
+| step | A module with at least one trackable item. Front-matter modules (pages only) are shown but kept out of every denominator. |
+| reached | Highest step where the student has done *any* trackable item. |
+| completed | Steps where the student has done *all* trackable items. |
+| expected | How many steps were due as of `--as-of` (default: now). |
+| pace | completed ÷ expected. 1.0 is on schedule, below is behind. |
+
+`reached` and `completed` come apart when a student skips ahead — doing step 3
+without step 1 gives reached 3, completed 1.
+
+```bash
+# Pace as of a past date, to compare week over week
+conductor progress course -c is402 --as-of 2026-08-30
+
+# Feed a dashboard: one row per student, one column per step
+conductor progress export -c is402 -o json | jq '[.[] | select(.on_pace | not)]'
+```
+
 ### Config
 
 ```bash
