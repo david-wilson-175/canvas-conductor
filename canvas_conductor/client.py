@@ -145,6 +145,17 @@ class CanvasClient:
             if "error" in body:
                 return str(body["error"])
         if isinstance(body, str) and body:
+            # Some Canvas routes (a missing route in particular) answer with a
+            # full HTML error page. Dumping 200 characters of `<!DOCTYPE html>`
+            # tells the user nothing, so say what actually happened instead.
+            if body.lstrip()[:400].lower().lstrip("﻿").startswith(
+                ("<!doctype html", "<html")
+            ):
+                return (
+                    "Canvas returned an HTML error page rather than a JSON error. "
+                    "This usually means the URL does not match a real API route "
+                    "(wrong path, or wrong HTTP method for that path)."
+                )
             return body[:200]
         return None
 
@@ -301,11 +312,30 @@ class CanvasClient:
             return None
         return response.json()
 
-    def delete(self, path: str) -> bool:
+    def delete(
+        self,
+        path: str,
+        params: dict | None = None,
+        parse: bool = False,
+    ) -> Any:
+        """DELETE `path`. Returns `True` on success, or the body if `parse`.
+
+        `params` goes on the query string — Canvas's destructive endpoints
+        take their modifiers there (notably `?task=conclude` on
+        `DELETE /courses/:id/enrollments/:id`, where the task decides
+        whether the record is preserved or destroyed).
+        """
         url = self._full_url(path)
-        response = self._request("DELETE", url)
+        response = self._request("DELETE", url, params=params)
         if response.status_code in (200, 202, 204):
-            return True
+            if not parse:
+                return True
+            if not response.content:
+                return None
+            try:
+                return response.json()
+            except ValueError:
+                return response.text
         self._raise_for_status(response)
         return False
 

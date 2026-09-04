@@ -12,6 +12,7 @@ from typing import Any
 import typer
 from rich.console import Console
 
+from ..config import is_course_readonly
 from ..exceptions import (
     CanvasAuthError,
     CanvasError,
@@ -90,6 +91,40 @@ def confirm_or_abort(message: str, yes: bool, dry_run: bool) -> None:
     if not typer.confirm(message, default=False):
         err_console.print("Aborted.")
         raise typer.Exit(code=1)
+
+
+def guard_readonly(course_key: str | None, force: bool, dry_run: bool = False) -> None:
+    """Refuse a write against a course marked `readonly = true` in config.toml.
+
+    The flag pre-dates any enforcement: it lived in config.toml purely as a
+    note to humans, and the CLI would happily write to a course carrying it.
+    This turns it into an actual interlock. `--force` overrides it (loudly),
+    and `--dry-run` is allowed through since it touches nothing.
+    """
+    if not is_course_readonly(course_key):
+        return
+
+    label = course_key or "the default course"
+    reason = (
+        f"Course '{label}' is marked [bold]readonly = true[/bold] in config.toml"
+    )
+
+    if force:
+        err_console.print(f"[yellow]WARNING:[/yellow] {reason}. --force given; proceeding.")
+        return
+    if dry_run:
+        err_console.print(
+            f"[yellow]NOTE:[/yellow] {reason}. --dry-run writes nothing, but this "
+            "command would be refused without --force."
+        )
+        return
+
+    err_console.print(
+        f"[red]ERROR:[/red] {reason}, so write commands are blocked against it.\n"
+        "Re-run with --force if you really mean to write, or drop the readonly "
+        "flag from that course's config block."
+    )
+    raise typer.Exit(code=9)
 
 
 def parse_kv_list(value: str | None) -> dict[str, str]:

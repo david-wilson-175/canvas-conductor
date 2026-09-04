@@ -330,6 +330,93 @@ conductor enrollments list -c is402 --type student --state active
 conductor enrollments summary -c is402          # Show enrollment counts by type
 ```
 
+Adding people:
+
+```bash
+# The common case — a netid is treated as a login id automatically.
+conductor enrollments add -c is402 --user milla23 --role ta --state active
+
+# Equivalent, spelled out. sis_user_id: and bare numeric ids also work.
+conductor enrollments add -c is402 --user sis_login_id:milla23 --role ta
+
+# Institution-defined role (e.g. a real "Peer Mentor" role).
+conductor enrollments add -c is402 --user milla23 --role-id 412
+
+# Into one section, restricted to seeing only that section.
+conductor enrollments add -c is402 --user milla23 --role designer \
+    --section 45231 --limit-to-section
+```
+
+`--role` takes a friendly name rather than Canvas's internal type:
+
+| `--role` | Canvas type | What it grants |
+|---|---|---|
+| `student` | `StudentEnrollment` | Normal student access. |
+| `teacher` / `instructor` | `TeacherEnrollment` | **Full control** of the course. Always prompts for confirmation. |
+| `ta` | `TaEnrollment` | Includes **gradebook access** — a TA can view and change every student's grades. |
+| `designer` | `DesignerEnrollment` | Edit course content, no grade visibility. Usually what people actually want when they say "an assistant who can see the course". |
+| `observer` | `ObserverEnrollment` | Read-only; pair with `--associated-user` to tie them to a student. |
+
+`--state` defaults to `invited`, which means the person must accept before
+anything appears for them. `--state active` puts the course straight on
+their dashboard. `--notify` is on by default; pass `--no-notify` to add
+someone silently.
+
+**Names don't work, and can't.** Resolving a name to a user id needs the
+account-level user search, which returns 403 for an ordinary teacher token.
+`--user "Jane Smith"` is rejected up front with that explanation rather
+than failing later at the API.
+
+Changing and removing:
+
+```bash
+# Change a role. Canvas has no PUT for enrollments, so this re-enrols the
+# person and then applies --task to their old enrollment — in that order,
+# so a failed add leaves their existing access intact.
+conductor enrollments update -c is402 --enrollment-id 1911492 \
+    --role designer --task conclude
+
+conductor enrollments remove -c is402 --enrollment-id 1911492 --task conclude
+conductor enrollments reactivate -c is402 --enrollment-id 1911492
+```
+
+`remove` requires an explicit `--task` because the options are not
+variations on a theme:
+
+| `--task` | Effect |
+|---|---|
+| `conclude` | Ends access. The enrollment and its submissions are preserved. This is the one that works with a plain teacher token. |
+| `deactivate` / `inactivate` | Marks the enrollment inactive; grades survive. Needs rights beyond `manage_students` — see below. |
+| `delete` | **Destroys** the enrollment record and the submissions attached to it. Additionally requires `--confirm-delete`. |
+
+Canvas will not let you `delete`, `deactivate` or `inactivate` **your own**
+enrollment unless you hold account-level `manage_admin_users`, even with
+every course-level permission set. `conclude` is not subject to that check.
+The CLI says so when it hits the 403 instead of surfacing the raw error.
+
+Every write verifies itself by re-reading the enrollment from Canvas and
+confirming its type and state before reporting success — a Canvas write can
+return `200 OK` and change nothing, and the create response is known to come
+back with `user: None` even when it worked. All four write commands support
+`--dry-run`, which prints the exact payload and target and sends nothing.
+
+### Read-only courses
+
+A course can be marked in `config.toml`:
+
+```toml
+[courses.univ101]
+id = 37774
+name = "UNIV 101-179: BYU Foundations"
+readonly = true
+```
+
+Write commands then refuse to touch it (exit code 9). Reads are unaffected,
+`--dry-run` still works and says what would have been refused, and `--force`
+overrides the block with a warning. This flag previously existed as a note
+for humans that the CLI ignored entirely; it is now enforced for the
+`enrollments` write commands.
+
 ### Sections
 
 Cross-listing is how Canvas combines multiple sections into one course:

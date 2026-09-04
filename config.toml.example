@@ -44,6 +44,11 @@ id = 12345
 name = "Course Display Name"
 # Term label (for your own reference; not sent to Canvas).
 term = "Fall 2026"
+# Optional. Block write commands against this course (exit code 9). Reads
+# and --dry-run still work; --force overrides with a warning. Use it for
+# course shells you don't own — a section maintained centrally by another
+# department, or a live course you only ever want to read from.
+# readonly = true
 
 # Add additional [courses.<key>] blocks for each course you manage:
 #
