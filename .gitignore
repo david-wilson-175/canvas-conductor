@@ -5,6 +5,8 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+.coverage
+htmlcov/
 .venv/
 .DS_Store
 uv.lock
