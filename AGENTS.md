@@ -64,6 +64,7 @@ canvas-conductor/
 │   │   ├── pages.py        # ← Best reference for the standard command pattern
 │   │   ├── modules.py
 │   │   ├── files.py
+│   │   ├── progress.py     # Per-student + aggregate module-sequence progress
 │   │   └── …
 │   └── extensions/         # Private by default; also scans CONDUCTOR_EXTENSIONS_DIR
 │       ├── __init__.py     # Auto-discovery loader (don't edit unless fixing it)
@@ -392,6 +393,32 @@ These bit us during real work. Save yourself the rediscovery:
   11:59 PM deadline close at 5:59 PM. Use
   `utils.dates.to_canvas_datetime(date)`, which resolves the zone from
   `[defaults] timezone`.
+
+- **Module completion state is a lie in a course with no requirements.**
+  `GET /courses/:id/modules?student_id=N` returns `state: "completed"` and a
+  fresh `completed_at` for *every* module and *every* student when no module
+  item carries a completion requirement — including students who have never
+  opened the course (verified against a live 168-student course). The
+  timestamp is just when Canvas lazily created the progression row. The
+  companion `GET /courses/:id/users/:uid/progress` is at least honest: it
+  400s with "no progress available because this course is not module based".
+  Never read `state` without first checking that requirements exist;
+  `commands/progress.py` refuses `--source native` in that case rather than
+  reporting 100% completion.
+
+- **A module item's `content_id` is type-dependent.** For `Assignment` it's
+  the assignment id, for `Quiz` the quiz id, for `Discussion` the topic id.
+  To go from a module item to its submissions, map through the assignment
+  listing — assignments carry `quiz_id` and `discussion_topic.id`
+  back-references, so one `GET /courses/:id/assignments` builds every map.
+  New Quizzes items arrive typed as `Assignment` already.
+
+- **`GET /courses/:id/students/submissions?student_ids[]=all`** pulls every
+  student's every submission in one paginated sweep (~10 requests for 168
+  students × 5 assignments). Use it instead of looping per student. It
+  includes the Student View test student, who has no real enrollment —
+  drive from the enrollment list and left-join, or that phantom lands in
+  your denominator.
 
 - **The token is teacher-level.** Admin endpoints (account-level reads,
   user provisioning, SIS) will 403. If you encounter a 403, you've hit one
